@@ -9,7 +9,9 @@
 </p>
 
 <p align="center">
-  <a href="#license"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
+  <a href="https://github.com/Azathrix/AzathrixFramework"><img src="https://img.shields.io/badge/GitHub-AzathrixFramework-black.svg" alt="GitHub"></a>
+  <a href="https://www.npmjs.com/package/com.azathrix.framework"><img src="https://img.shields.io/npm/v/com.azathrix.framework.svg" alt="npm"></a>
+  <a href="https://github.com/Azathrix/AzathrixFramework/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
   <a href="https://unity.com/"><img src="https://img.shields.io/badge/Unity-6000.3+-black.svg" alt="Unity"></a>
 </p>
 
@@ -24,6 +26,20 @@
 - 完整的编辑器支持，系统在编辑器模式下也能运行
 
 ## 安装
+
+### 方式一：Package Manager（推荐）
+
+1. 打开 `Edit > Project Settings > Package Manager`
+2. 在 `Scoped Registries` 中添加：
+   - Name: `Azathrix`
+   - URL: `https://registry.npmjs.org`
+   - Scope(s): `com.azathrix`
+3. 点击 `Save`
+4. 打开 `Window > Package Manager`
+5. 切换到 `My Registries`
+6. 找到 `Azathrix Framework` 并安装
+
+### 方式二：修改 manifest.json
 
 在 `Packages/manifest.json` 中添加：
 
@@ -42,9 +58,16 @@
 }
 ```
 
-> 注册 `com.azathrix` scope 后，可以在 Package Manager 的 "My Registries" 中发现更多 Azathrix 工具包。
->
 > 框架依赖 UniTask，会通过 npm 自动安装 `com.azathrix.unitask`。
+
+### 方式三：Git URL
+
+1. 打开 `Window > Package Manager`
+2. 点击 `+` > `Add package from git URL...`
+3. 输入：`https://github.com/Azathrix/AzathrixFramework.git`
+
+> ⚠️ Git 方式无法自动解析依赖，需要先手动安装：
+> - [UniTask](https://github.com/Cysharp/UniTask.git?path=src/UniTask/Assets/Plugins/UniTask)
 
 ## 快速开始
 
