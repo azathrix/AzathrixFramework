@@ -27,7 +27,7 @@
 
 ## 安装
 
-### 方式一：Package Manager（推荐）
+### 方式一：Package Manager 添加 Scope（推荐）
 
 1. 打开 `Edit > Project Settings > Package Manager`
 2. 在 `Scoped Registries` 中添加：
@@ -39,35 +39,24 @@
 5. 切换到 `My Registries`
 6. 找到 `Azathrix Framework` 并安装
 
-### 方式二：修改 manifest.json
-
-在 `Packages/manifest.json` 中添加：
-
-```json
-{
-  "scopedRegistries": [
-    {
-      "name": "Azathrix",
-      "url": "https://registry.npmjs.org",
-      "scopes": ["com.azathrix"]
-    }
-  ],
-  "dependencies": {
-    "com.azathrix.framework": "*"
-  }
-}
-```
-
 > 框架依赖 UniTask，会通过 npm 自动安装 `com.azathrix.unitask`。
 
-### 方式三：Git URL
+### 方式二：Git URL
 
 1. 打开 `Window > Package Manager`
 2. 点击 `+` > `Add package from git URL...`
-3. 输入：`https://github.com/Azathrix/AzathrixFramework.git`
+3. 输入：`https://github.com/Azathrix/AzathrixFramework.git#latest`
 
 > ⚠️ Git 方式无法自动解析依赖，需要先手动安装：
 > - [UniTask](https://github.com/Cysharp/UniTask.git?path=src/UniTask/Assets/Plugins/UniTask)
+
+### 方式三：npm 命令
+
+在项目的 `Packages` 目录下执行：
+
+```bash
+npm install com.azathrix.framework
+```
 
 ## 快速开始
 
