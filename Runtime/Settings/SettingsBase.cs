@@ -9,10 +9,10 @@ namespace Azathrix.Framework.Settings
     /// 设置路径特性，用于指定 Resources 下的路径
     /// </summary>
     [AttributeUsage(AttributeTargets.Class)]
-    public class SettingsPathAttribute : Attribute
+    public class SettingsNameAttribute : Attribute
     {
-        public string Path { get; }
-        public SettingsPathAttribute(string path) => Path = path;
+        public string Name { get; }
+        public SettingsNameAttribute(string name) => Name = name;
     }
 
     /// <summary>
@@ -29,8 +29,8 @@ namespace Azathrix.Framework.Settings
         /// </summary>
         public static string GetResourcePath()
         {
-            var attr = (SettingsPathAttribute)Attribute.GetCustomAttribute(typeof(T), typeof(SettingsPathAttribute));
-            return attr?.Path ?? typeof(T).Name;
+            var attr = (SettingsNameAttribute) Attribute.GetCustomAttribute(typeof(T), typeof(SettingsNameAttribute));
+            return attr?.Name ?? typeof(T).Name;
         }
 
         /// <summary>
@@ -54,38 +54,34 @@ namespace Azathrix.Framework.Settings
                         // 回退到 Resources.Load
                         _instance = Resources.Load<T>(path);
                     }
+
                     if (_instance == null)
                         _instance = CreateDefault(path);
                 }
 #else
-                if (!AzathrixFramework.IsSetup) throw new Exception("AzathrixFramework is not setup");
-                var c = CreateInstance<T>();
-                c.LoadSetting();
-                Destroy(c);
+                if (_instance == null)
+                {
+                    var path = GetResourcePath();
+                    // 优先使用框架的 ResourcesLoader（如果已初始化）
+                    if (AzathrixFramework.IsSetup && AzathrixFramework.ResourcesLoader != null)
+                    {
+                        _instance = AzathrixFramework.ResourcesLoader.Load<T>(path);
+                    }
+                    // 回退到 Resources.Load（启动阶段使用）
+                    _instance ??= Resources.Load<T>(path);
+                }
 #endif
                 return _instance;
             }
         }
 
         /// <summary>
-        /// 加载配置
+        /// 设置配置
         /// </summary>
         /// <returns></returns>
-        protected virtual void LoadSetting()
+        public static void SetSettings(T t)
         {
-            if (_instance == null)
-            {
-                var path = GetResourcePath();
-                _instance = AzathrixFramework.ResourcesLoader.Load<T>(path);
-            }
-        }
-
-        /// <summary>
-        /// 清除缓存实例（用于域重载后重新加载）
-        /// </summary>
-        public static void ClearInstance()
-        {
-            _instance = null;
+            _instance = t;
         }
 
 #if UNITY_EDITOR
@@ -128,7 +124,7 @@ namespace Azathrix.Framework.Settings
         {
             var settings = CreateInstance<T>();
 
-            var resourcesPath = "Assets/Resources";//GetModuleResourcesPath();
+            var resourcesPath = "Assets/Resources"; //GetModuleResourcesPath();
             if (!UnityEditor.AssetDatabase.IsValidFolder(resourcesPath))
             {
                 var parent = Path.GetDirectoryName(resourcesPath)?.Replace("\\", "/");

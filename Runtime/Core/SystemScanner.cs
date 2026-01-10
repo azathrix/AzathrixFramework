@@ -2,10 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using Azathrix.Framework.Core.Attributes;
 using Azathrix.Framework.Core.Configs;
 using Azathrix.Framework.Interfaces;
-using Azathrix.Framework.Settings;
+using Azathrix.Framework.Registry;
 using Cysharp.Threading.Tasks;
 
 namespace Azathrix.Framework.Core
@@ -34,6 +33,32 @@ namespace Azathrix.Framework.Core
         /// </summary>
         /// <returns>扫描到的系统类型数组</returns>
         public async UniTask<Type[]> ScanAsync()
+        {
+            // 优先从 SystemRegistry 读取
+            var registry = SystemRegistry.Instance;
+            if (registry != null && registry.entries.Count > 0)
+            {
+                var types = registry.GetEnabledTypes()
+                    .Where(t => IsValidSystemType(t))
+                    .ToArray();
+
+                if (types.Length > 0)
+                {
+                    _logger.Info($"[Scanner] 从 SystemRegistry 加载 {types.Length} 个系统");
+                    await UniTask.Yield();
+                    return types;
+                }
+            }
+
+            // Fallback: 反射扫描
+            _logger.Warning("[Scanner] SystemRegistry 为空，使用反射扫描");
+            return await ScanByReflectionAsync();
+        }
+
+        /// <summary>
+        /// 通过反射扫描系统类型（Fallback）
+        /// </summary>
+        private async UniTask<Type[]> ScanByReflectionAsync()
         {
             var result = new List<Type>();
             var assemblies = GetAssembliesToScan().ToList();
@@ -86,6 +111,10 @@ namespace Azathrix.Framework.Core
         {
             var name = assembly.GetName().Name;
 
+            // 跳过 Unity 热重载产生的临时程序集
+            if (name.Contains("-") && name.Length > 50)
+                return false;
+
             // 排除系统程序集
             if (_config.ExcludeAssemblyPrefixes.Any(p => name.StartsWith(p)))
                 return false;
@@ -122,28 +151,12 @@ namespace Azathrix.Framework.Core
             if (type.IsAbstract || type.IsInterface)
                 return false;
 
-            // AutoRegister 检查
-            if (_config.RequireAutoRegister && type.GetCustomAttribute<AutoRegisterAttribute>() == null)
-                return false;
-
             // 检查系统注册配置（编辑器禁用的系统）
-            var registrySettings = SystemRegistrySettings.Instance;
-            if (registrySettings != null && registrySettings.IsSystemDisabled(type))
+            var registry = SystemRegistry.Instance;
+            if (registry != null && registry.IsSystemDisabled(type))
             {
-                _logger.Info($"系统被禁用（通过 SystemRegistry）: {type.FullName}");
+                _logger.Info($"系统被禁用: {type.FullName}");
                 return false;
-            }
-
-            // 检查模块是否启用
-            var moduleRegistry = ModuleRegistrySettings.Instance;
-            if (moduleRegistry != null)
-            {
-                var assemblyName = type.Assembly.GetName().Name;
-                if (moduleRegistry.IsAssemblyDisabled(assemblyName))
-                {
-                    _logger.Info($"系统被禁用（模块禁用）: {type.FullName}");
-                    return false;
-                }
             }
 
             // 自定义过滤器

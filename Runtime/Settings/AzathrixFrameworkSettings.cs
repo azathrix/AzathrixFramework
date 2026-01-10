@@ -33,14 +33,11 @@ namespace Azathrix.Framework.Settings
     /// <summary>
     /// 框架配置
     /// </summary>
-    [SettingsPath("AzathrixFrameworkSettings")]
-    [ShowSetting("Framework Settings")]
+    [SettingsName("AzathrixFrameworkSettings")]
+    [ShowSetting("框架设置")]
     public class AzathrixFrameworkSettings : SettingsBase<AzathrixFrameworkSettings>
     {
         [Header("扫描配置")] [Tooltip("扫描模式")] public ScanMode scanMode = ScanMode.All;
-
-        [Tooltip("是否只扫描带 [AutoRegister] 特性的系统")]
-        public bool requireAutoRegister = true;
 
         [Tooltip("要扫描的程序集名称（ScanMode.Specified 时生效）")]
         public List<string> assemblyNames = new();
@@ -59,13 +56,8 @@ namespace Azathrix.Framework.Settings
         [Header("Runtime 配置")] [Tooltip("是否启用性能统计")]
         public bool enableProfiling;
 
-        [Tooltip("预定义的条件符号")] public List<string> symbols = new();
-
         [Header("初始化配置")] [Tooltip("是否自动初始化（运行时进入 Play 模式自动初始化）")]
         public bool autoInitialize = true;
-
-        [Tooltip("是否在编辑器模式下初始化支持 IEditorSupport 的系统")]
-        public bool enableEditorSupport = true;
 
         [Header("日志配置")]
         [Tooltip("系统信息输出级别")]
@@ -82,7 +74,6 @@ namespace Azathrix.Framework.Settings
         {
             var config = new ScannerConfig
             {
-                RequireAutoRegister = requireAutoRegister,
                 ExcludeAssemblyPrefixes = new List<string>(excludeAssemblyPrefixes)
             };
 
@@ -101,8 +92,7 @@ namespace Azathrix.Framework.Settings
         {
             return new RuntimeConfig
             {
-                EnableProfiling = enableProfiling,
-                Symbols = new List<string>(symbols)
+                EnableProfiling = enableProfiling
             };
         }
 

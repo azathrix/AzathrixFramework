@@ -12,26 +12,20 @@ namespace Azathrix.Framework.Editor.Core
     public class AzathrixFrameworkSettingsEditor : UnityEditor.Editor
     {
         private SerializedProperty _scanMode;
-        private SerializedProperty _requireAutoRegister;
         private SerializedProperty _assemblyNames;
         private SerializedProperty _excludeAssemblyPrefixes;
         private SerializedProperty _enableProfiling;
-        private SerializedProperty _symbols;
         private SerializedProperty _autoInitialize;
-        private SerializedProperty _enableEditorSupport;
         private SerializedProperty _systemInfoLevel;
         private SerializedProperty _debugEditorPipeline;
 
         private void OnEnable()
         {
             _scanMode = serializedObject.FindProperty("scanMode");
-            _requireAutoRegister = serializedObject.FindProperty("requireAutoRegister");
             _assemblyNames = serializedObject.FindProperty("assemblyNames");
             _excludeAssemblyPrefixes = serializedObject.FindProperty("excludeAssemblyPrefixes");
             _enableProfiling = serializedObject.FindProperty("enableProfiling");
-            _symbols = serializedObject.FindProperty("symbols");
             _autoInitialize = serializedObject.FindProperty("autoInitialize");
-            _enableEditorSupport = serializedObject.FindProperty("enableEditorSupport");
             _systemInfoLevel = serializedObject.FindProperty("systemInfoLevel");
             _debugEditorPipeline = serializedObject.FindProperty("debugEditorPipeline");
         }
@@ -43,7 +37,6 @@ namespace Azathrix.Framework.Editor.Core
             // 扫描配置
             // EditorGUILayout.LabelField("扫描配置", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(_scanMode, new GUIContent("扫描模式"));
-            EditorGUILayout.PropertyField(_requireAutoRegister, new GUIContent("只扫描 [AutoRegister]"));
 
             if (_scanMode.enumValueIndex == (int)ScanMode.Specified)
             {
@@ -57,15 +50,12 @@ namespace Azathrix.Framework.Editor.Core
             // Runtime 配置
             // EditorGUILayout.LabelField("Runtime 配置", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(_enableProfiling, new GUIContent("启用性能统计"));
-            EditorGUILayout.PropertyField(_symbols, new GUIContent("条件符号"), true);
 
             EditorGUILayout.Space();
 
             // 初始化配置
             // EditorGUILayout.LabelField("初始化配置", EditorStyles.boldLabel);
             EditorGUILayout.PropertyField(_autoInitialize, new GUIContent("自动初始化"));
-            EditorGUILayout.PropertyField(_enableEditorSupport, new GUIContent("编辑器支持"));
-
             EditorGUILayout.Space();
 
             // 日志配置

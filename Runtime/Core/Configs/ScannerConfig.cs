@@ -10,11 +10,6 @@ namespace Azathrix.Framework.Core.Configs
     public class ScannerConfig
     {
         /// <summary>
-        /// 是否只扫描带 [AutoRegister] 特性的系统
-        /// </summary>
-        public bool RequireAutoRegister { get; set; } = true;
-
-        /// <summary>
         /// 要扫描的程序集（为空则扫描所有）
         /// </summary>
         public List<Assembly> Assemblies { get; set; } = new();

@@ -6,9 +6,10 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using Azathrix.Framework.Core.Configs;
-using Azathrix.Framework.Core.Pipelines;
+using Azathrix.Framework.Core.Startup;
 using Azathrix.Framework.Events.Core;
 using Azathrix.Framework.Interfaces;
+using Azathrix.Framework.Registry;
 using Azathrix.Framework.Settings;
 using Azathrix.Framework.Tools;
 using Cysharp.Threading.Tasks;
@@ -35,11 +36,11 @@ namespace Azathrix.Framework.Core
         public static RuntimeConfig RuntimeConfig { get; private set; }
 
         private static SystemRuntimeManager _runtimeManager;
-        private static PipelineExecutor _pipelineExecutor;
+        private static StartupPipeline _pipeline;
 
 #if UNITY_EDITOR
         private static SystemRuntimeManager _editorRuntimeManager;
-        private static PipelineExecutor _editorPipelineExecutor;
+        private static StartupPipeline _editorPipeline;
 
         public static SystemRuntimeManager EffectiveRuntimeManager =>
             EditorApplication.isPlaying ? _runtimeManager : _editorRuntimeManager;
@@ -66,12 +67,17 @@ namespace Azathrix.Framework.Core
                 }
             };
 
-            ModuleRegistrySettings.OnSettingsChanged += () =>
+            SystemRegistry.OnRegistryChanged += () =>
             {
                 if (!EditorApplication.isPlayingOrWillChangePlaymode)
                     RefreshEditorPipelineAsync().Forget();
             };
-            SystemRegistrySettings.OnSettingsChanged += () =>
+            PhaseRegistry.OnRegistryChanged += () =>
+            {
+                if (!EditorApplication.isPlayingOrWillChangePlaymode)
+                    RefreshEditorPipelineAsync().Forget();
+            };
+            StartupHookRegistry.OnRegistryChanged += () =>
             {
                 if (!EditorApplication.isPlayingOrWillChangePlaymode)
                     RefreshEditorPipelineAsync().Forget();
@@ -88,18 +94,19 @@ namespace Azathrix.Framework.Core
 
             Logger ??= new DefaultLogger();
 
-            _editorPipelineExecutor = new PipelineExecutor(Logger, scannerConfig)
+            _editorPipeline = new StartupPipeline(Logger, scannerConfig)
             {
                 SilentMode = !settings.debugEditorPipeline
-            };
+            }; 
 
             var context = new PhaseContext
             {
                 Logger = Logger,
-                ResourcesLoader = new DefaultResourcesLoader()
+                ResourcesLoader = new DefaultResourcesLoader(),
+                IsEditor = true
             };
 
-            await _editorPipelineExecutor.ExecuteAsync<IEditorPhase>(context);
+            await _editorPipeline.ExecuteAsync(context);
         }
 
         private static async UniTask RefreshEditorPipelineAsync()
@@ -115,11 +122,12 @@ namespace Azathrix.Framework.Core
             var context = new PhaseContext
             {
                 Logger = Logger,
-                ResourcesLoader = ResourcesLoader
+                ResourcesLoader = ResourcesLoader,
+                IsEditor = true
             };
 
             // 使用新的扫描阶段获取类型
-            var scanPhase = new Pipelines.DefaultPhases.Editor.EditorScanPhase();
+            var scanPhase = new Startup.DefaultPhases.Editor.EditorScanPhase();
             await scanPhase.ExecuteAsync(context);
 
             // 同步系统：移除不存在的，添加新的
@@ -162,7 +170,7 @@ namespace Azathrix.Framework.Core
         public static void ResetEditorRuntime()
         {
             _editorRuntimeManager = null;
-            _editorPipelineExecutor = null;
+            _editorPipeline = null;
             IsSetup = false;
         }
 
@@ -179,13 +187,14 @@ namespace Azathrix.Framework.Core
             RuntimeConfig = null;
 #if UNITY_EDITOR
             _editorRuntimeManager = null;
-            _editorPipelineExecutor = null;
+            _editorPipeline = null;
 #endif
             IsApplicationStarted = false;
             IsStarted = false;
             IsStarting = false;
             _runtimeManager = null;
-            _pipelineExecutor = null;
+            _pipeline = null;
+            _frameworkBehaviour = null;
             IsSetup = false;
             Dispatcher = new EventDispatcher();
         }
@@ -209,27 +218,43 @@ namespace Azathrix.Framework.Core
             IsStarting = true;
             IsApplicationStarted = true;
 
-            Logger = new DefaultLogger();
-            var totalWatch = Stopwatch.StartNew();
-
-            Log.Separator("Azathrix Framework");
-            Log.Info($"版本: {Version}");
-
-            LogSystemInfo();
-
-            var settings = AzathrixFrameworkSettings.Instance;
-            _pipelineExecutor = new PipelineExecutor(Logger, settings.ToScannerConfig());
-
-            var context = new PhaseContext
+            try
             {
-                Logger = Logger,
-                ResourcesLoader = new DefaultResourcesLoader()
-            };
+                Logger = new DefaultLogger();
+                var totalWatch = Stopwatch.StartNew();
 
-            await _pipelineExecutor.ExecuteAsync<IRuntimePhase>(context);
+                Log.Separator("Azathrix Framework");
+                Log.Info($"版本: {Version}");
 
-            totalWatch.Stop();
-            Log.Info($"[Framework] 总耗时: {totalWatch.Elapsed.TotalMilliseconds:F2}ms");
+                LogSystemInfo();
+
+                var settings = AzathrixFrameworkSettings.Instance;
+                _pipeline = new StartupPipeline(Logger, settings.ToScannerConfig());
+
+                var context = new PhaseContext
+                {
+                    Logger = Logger,
+                    ResourcesLoader = new DefaultResourcesLoader()
+                };
+
+                await _pipeline.ExecuteAsync(context);
+
+                if (context.Aborted)
+                {
+                    Log.Error("[Framework] 启动被中断");
+                    IsStarting = false;
+                    return;
+                }
+
+                totalWatch.Stop();
+                Log.Info($"[Framework] 总耗时: {totalWatch.Elapsed.TotalMilliseconds:F2}ms");
+            }
+            catch (Exception e)
+            {
+                Log.Error($"[Framework] 启动失败: {e}");
+                IsStarting = false;
+                throw;
+            }
         }
 
         /// <summary>
@@ -237,9 +262,9 @@ namespace Azathrix.Framework.Core
         /// </summary>
         public static void RefreshPipeline()
         {
-            _pipelineExecutor?.Refresh<IRuntimePhase>();
+            _pipeline?.Refresh();
 #if UNITY_EDITOR
-            _editorPipelineExecutor?.Refresh<IEditorPhase>();
+            _editorPipeline?.Refresh();
 #endif
         }
 
@@ -266,11 +291,31 @@ namespace Azathrix.Framework.Core
             IsStarting = !value;
         }
 
+        private static FrameworkBehaviour _frameworkBehaviour;
+
         internal static void CreateRuntimeBehaviour()
         {
+            // 已存在则重新初始化（支持重试场景）
+            if (_frameworkBehaviour != null)
+            {
+                _frameworkBehaviour.Initialize(_runtimeManager);
+                return;
+            }
+
+            var existing = GameObject.Find("[Azathrix Framework]");
+            if (existing != null)
+            {
+                _frameworkBehaviour = existing.GetComponent<FrameworkBehaviour>();
+                if (_frameworkBehaviour != null)
+                {
+                    _frameworkBehaviour.Initialize(_runtimeManager);
+                    return;
+                }
+            }
+
             var go = new GameObject("[Azathrix Framework]");
-            var behaviour = go.AddComponent<FrameworkBehaviour>();
-            behaviour.Initialize(_runtimeManager);
+            _frameworkBehaviour = go.AddComponent<FrameworkBehaviour>();
+            _frameworkBehaviour.Initialize(_runtimeManager);
             Log.Info("[Register] 创建 FrameworkBehaviour");
         }
 

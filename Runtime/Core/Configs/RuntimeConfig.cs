@@ -14,11 +14,6 @@ namespace Azathrix.Framework.Core.Configs
         public bool EnableProfiling { get; set; }
 
         /// <summary>
-        /// 预定义的条件符号
-        /// </summary>
-        public List<string> Symbols { get; set; } = new();
-
-        /// <summary>
         /// 手动指定要注册的系统类型（优先于扫描）
         /// </summary>
         public List<Type> ManualSystemTypes { get; set; } = new();

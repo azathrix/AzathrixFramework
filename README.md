@@ -63,7 +63,6 @@ npm install com.azathrix.framework
 ### 创建系统
 
 ```csharp
-[AutoRegister]
 public class PlayerSystem : ISystem, ISystemInitialize, ISystemUpdate
 {
     [Inject] private InputSystem _input;
@@ -110,14 +109,12 @@ AzathrixFramework.Dispatcher.Emit(GameEvent.LevelComplete, new { score = 1000 })
 
 | 属性 | 说明 |
 |------|------|
-| `[AutoRegister]` | 自动注册系统 |
 | `[Inject]` | 依赖注入（必须存在） |
 | `[WeakInject]` | 弱依赖注入（可为空） |
 | `[DependsOn(typeof(...))]` | 声明系统依赖顺序 |
 | `[SystemPriority(n)]` | 系统优先级（越小越先） |
 | `[SystemAlias("name")]` | 系统别名 |
 | `[UpdateInterval(ms)]` | Update 调用间隔 |
-| `[ConditionalSystem("SYMBOL")]` | 条件编译注册 |
 
 ## 生命周期接口
 
@@ -239,7 +236,6 @@ public class LoadSceneHook : IAfterPhaseHook<IStartPhase>
 在 `Assets/Resources/AzathrixFrameworkSettings.asset` 中配置：
 
 - **扫描模式** - All（全部）或 Specified（指定程序集）
-- **只扫描 [AutoRegister]** - 是否只注册带标记的系统
 - **自动初始化** - 进入 Play 模式时自动启动框架
 - **编辑器支持** - 编辑器模式下初始化支持的系统
 

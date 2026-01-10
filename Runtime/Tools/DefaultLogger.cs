@@ -77,7 +77,7 @@ namespace Azathrix.Framework.Tools
             if (_colorStack.Count > 0) colorStyle = _colorStack.Peek();
             LogInternal("Info", message, context, InfoColor(colorStyle));
         }
-
+ 
         public void Warning(object message, Object context = null)
         {
             if (!ShouldLog(LogLevel.Warning)) return;

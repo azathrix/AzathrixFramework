@@ -21,7 +21,6 @@ namespace Azathrix.Framework.Interfaces
         /// <returns>加载的资源实例</returns>
         public T Load<T>(string key) where T : Object;
         
-        /// <summary>加载场景</summary>
-        UniTask LoadSceneAsync(string key, bool additive = false);
+ 
     }
 }

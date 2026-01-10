@@ -6,7 +6,7 @@ using System.Reflection;
 using Azathrix.Framework.Core.Attributes;
 using Azathrix.Framework.Interfaces;
 using Azathrix.Framework.Interfaces.SystemEvents;
-using Azathrix.Framework.Settings;
+using Azathrix.Framework.Registry;
 using Azathrix.Framework.Tools;
 using Cysharp.Threading.Tasks;
 
@@ -59,9 +59,6 @@ namespace Azathrix.Framework.Core
         private readonly Dictionary<ISystem, PerformanceData> _performanceData = new();
         private readonly Stopwatch _stopwatch = new();
 
-        // 条件符号集合
-        private readonly HashSet<string> _definedSymbols = new();
-
         // 系统别名映射
         private readonly Dictionary<string, ISystem> _aliasToInstance = new();
 
@@ -97,34 +94,7 @@ namespace Azathrix.Framework.Core
 
         public SystemRuntimeManager()
         {
-            InitializeDefinedSymbols();
         }
-
-        /// <summary>
-        /// 初始化预定义的条件符号（UNITY_EDITOR、DEBUG、DEVELOPMENT_BUILD）
-        /// </summary>
-        private void InitializeDefinedSymbols()
-        {
-#if UNITY_EDITOR
-            _definedSymbols.Add("UNITY_EDITOR");
-#endif
-#if DEBUG
-            _definedSymbols.Add("DEBUG");
-#endif
-#if DEVELOPMENT_BUILD
-            _definedSymbols.Add("DEVELOPMENT_BUILD");
-#endif
-        }
-
-        /// <summary>
-        /// 添加条件符号
-        /// </summary>
-        public void AddSymbol(string symbol) => _definedSymbols.Add(symbol);
-
-        /// <summary>
-        /// 移除条件符号
-        /// </summary>
-        public void RemoveSymbol(string symbol) => _definedSymbols.Remove(symbol);
 
         /// <summary>
         /// 获取系统名称（从缓存或 SystemAliasAttribute）
@@ -215,7 +185,6 @@ namespace Azathrix.Framework.Core
         /// </summary>
         public List<SystemStatus> GetAllSystemStatus()
         {
-            var moduleRegistry = ModuleRegistrySettings.Instance;
             return _systems.Select(sys =>
             {
                 var perf = _performanceData.GetValueOrDefault(sys);
@@ -232,24 +201,9 @@ namespace Azathrix.Framework.Core
                     LastUpdateMs = perf?.LastMs ?? 0,
                     AverageUpdateMs = perf?.AverageMs ?? 0,
                     CanToggle = sys is ISystemEnabled,
-                    ModuleId = ExtractModuleId(type.Assembly.GetName().Name, moduleRegistry)
+                    ModuleId = type.Assembly.GetName().Name
                 };
             }).ToList();
-        }
-
-        /// <summary>
-        /// 从程序集名称提取模块ID
-        /// </summary>
-        private static string ExtractModuleId(string assemblyName, ModuleRegistrySettings registry)
-        {
-            if (registry == null) return null;
-            foreach (var module in registry.modules)
-            {
-                if (assemblyName.Contains(module.moduleId))
-                    return module.moduleId;
-            }
-
-            return null;
         }
 
         #endregion
@@ -278,36 +232,78 @@ namespace Azathrix.Framework.Core
             if (!IsEditorMode)
                 Log.Info($"[Register] 开始处理 {systemTypes.Length} 个系统类型");
 
-            // 过滤条件注册
-            var filteredTypes = FilterConditionalTypes(systemTypes);
-            if (!IsEditorMode && filteredTypes.Length != systemTypes.Length)
-                Log.Info($"[Register] 条件过滤后剩余 {filteredTypes.Length} 个系统");
+            // 对全量系统进行拓扑排序
+            var sortedTypes = TopologicalSort(systemTypes);
 
-            // 分离默认系统和非默认系统
-            var (defaultTypes, nonDefaultTypes) = SeparateDefaultTypes(filteredTypes);
+            // 预处理：收集系统信息
+            var defaultTypes = new HashSet<Type>();
+            var interfaceToImplementations = new Dictionary<Type, List<Type>>();
+            foreach (var type in sortedTypes)
+            {
+                if (type.GetCustomAttribute<DefaultAttribute>() != null)
+                    defaultTypes.Add(type);
+
+                foreach (var iface in type.GetInterfaces())
+                {
+                    if (iface != typeof(ISystem) && typeof(ISystem).IsAssignableFrom(iface))
+                    {
+                        if (!interfaceToImplementations.ContainsKey(iface))
+                            interfaceToImplementations[iface] = new List<Type>();
+                        interfaceToImplementations[iface].Add(type);
+                    }
+                }
+            }
+
+            // 确定每个接口应该使用哪个实现
+            // 优先级：SystemRegistry 配置 > 非默认 > 默认
+            var settings = SystemRegistry.Instance;
+            var interfaceToSelectedImpl = new Dictionary<Type, Type>();
+            foreach (var (iface, implementations) in interfaceToImplementations)
+            {
+                Type selected = null;
+
+                // 1. 检查 SystemRegistry 配置
+                var selectedImplName = settings?.GetSelectedImplementation(iface.FullName);
+                if (!string.IsNullOrEmpty(selectedImplName))
+                {
+                    selected = implementations.FirstOrDefault(t => t.FullName == selectedImplName);
+                }
+
+                // 2. 如果没有配置或配置的实现不存在，选择第一个非默认实现
+                if (selected == null)
+                {
+                    selected = implementations.FirstOrDefault(t => !defaultTypes.Contains(t));
+                }
+
+                // 3. 如果没有非默认实现，选择第一个默认实现
+                selected ??= implementations.FirstOrDefault();
+
+                if (selected != null)
+                    interfaceToSelectedImpl[iface] = selected;
+            }
+
             if (!IsEditorMode)
-                Log.Info($"[Register] 非默认系统: {nonDefaultTypes.Length} 个，默认系统: {defaultTypes.Length} 个");
+                Log.Info($"[Register] 非默认系统: {sortedTypes.Length - defaultTypes.Count} 个，默认系统: {defaultTypes.Count} 个");
 
-            // 拓扑排序处理依赖（先处理非默认系统）
-            var sortedNonDefaultTypes = TopologicalSort(nonDefaultTypes);
-            var sortedDefaultTypes = TopologicalSort(defaultTypes);
-
-            // 先注册非默认系统
-            foreach (var type in sortedNonDefaultTypes)
+            // 按拓扑排序顺序注册
+            foreach (var type in sortedTypes)
             {
                 try
                 {
-                    Register(type);
+                    // 检查该系统是否被任何接口选中
+                    bool isSelected = interfaceToSelectedImpl.Values.Contains(type);
+
+                    // 默认系统只有被选中才注册
+                    if (defaultTypes.Contains(type) && !isSelected)
+                        continue;
+
+                    Register(type, interfaceToSelectedImpl);
                 }
                 catch (Exception e)
                 {
                     Log.Exception(e);
                 }
             }
-
-            // 再注册默认系统（只注册没有其他实现的接口）
-            if (sortedDefaultTypes.Length > 0)
-                RegisterDefaultSystems(sortedDefaultTypes);
 
             // 依赖注入
             InjectDependencies();
@@ -428,7 +424,7 @@ namespace Azathrix.Framework.Core
         /// <summary>
         /// 注册系统
         /// </summary>
-        private void Register(Type type)
+        private void Register(Type type, Dictionary<Type, Type> interfaceToSelectedImpl = null)
         {
             if (_typeToInstance.ContainsKey(type))
                 return;
@@ -443,22 +439,20 @@ namespace Azathrix.Framework.Core
             _typeToInstance[type] = system;
 
             // 注册所有实现的 IGameSystem 派生接口
-            var settings = SystemRegistrySettings.Instance;
             var registeredInterfaces = new List<string>();
             foreach (var iface in type.GetInterfaces())
             {
                 if (iface != typeof(ISystem) && typeof(ISystem).IsAssignableFrom(iface))
                 {
+                    // 如果接口已被注册，跳过
                     if (_typeToInstance.ContainsKey(iface))
-                    {
                         continue;
-                    }
 
-                    // 检查是否有指定的实现
-                    var selectedImpl = settings?.GetSelectedImplementation(iface.FullName);
-                    if (selectedImpl != null && selectedImpl != type.FullName)
+                    // 如果有预选映射，检查当前类型是否是该接口的选定实现
+                    if (interfaceToSelectedImpl != null)
                     {
-                        continue;
+                        if (interfaceToSelectedImpl.TryGetValue(iface, out var selected) && selected != type)
+                            continue;
                     }
 
                     _typeToInstance[iface] = system;
@@ -770,133 +764,6 @@ namespace Azathrix.Framework.Core
 
         #endregion
 
-
-        #region 条件注册
-
-        /// <summary>
-        /// 过滤条件注册的类型，只保留满足条件的系统
-        /// </summary>
-        private Type[] FilterConditionalTypes(Type[] types)
-        {
-            return types.Where(CheckConditional).ToArray();
-        }
-
-        /// <summary>
-        /// 检查类型是否满足条件注册（ConditionalSystemAttribute）
-        /// </summary>
-        private bool CheckConditional(Type type)
-        {
-            var attr = type.GetCustomAttribute<ConditionalSystemAttribute>();
-            if (attr == null) return true;
-            return _definedSymbols.Contains(attr.Symbol);
-        }
-
-        #endregion
-
-        #region 默认系统处理
-
-        /// <summary>
-        /// 分离默认系统和非默认系统
-        /// </summary>
-        private (Type[] defaultTypes, Type[] nonDefaultTypes) SeparateDefaultTypes(Type[] types)
-        {
-            var defaultList = new List<Type>();
-            var nonDefaultList = new List<Type>();
-
-            foreach (var type in types)
-            {
-                if (type.GetCustomAttribute<DefaultAttribute>() != null)
-                    defaultList.Add(type);
-                else
-                    nonDefaultList.Add(type);
-            }
-
-            return (defaultList.ToArray(), nonDefaultList.ToArray());
-        }
-
-        /// <summary>
-        /// 注册默认系统（只注册没有其他实现的接口）
-        /// </summary>
-        private void RegisterDefaultSystems(Type[] defaultTypes)
-        {
-            var settings = SystemRegistrySettings.Instance;
-
-            // 按接口分组默认实现
-            var interfaceToDefaults = new Dictionary<Type, List<Type>>();
-            foreach (var type in defaultTypes)
-            {
-                foreach (var iface in type.GetInterfaces())
-                {
-                    if (iface != typeof(ISystem) && typeof(ISystem).IsAssignableFrom(iface))
-                    {
-                        if (!interfaceToDefaults.ContainsKey(iface))
-                            interfaceToDefaults[iface] = new List<Type>();
-                        interfaceToDefaults[iface].Add(type);
-                    }
-                }
-            }
-
-            // 注册默认系统
-            foreach (var type in defaultTypes)
-            {
-                bool shouldRegister = false;
-
-                // 检查该类型实现的所有接口
-                foreach (var iface in type.GetInterfaces())
-                {
-                    if (iface != typeof(ISystem) && typeof(ISystem).IsAssignableFrom(iface))
-                    {
-                        // 如果接口还没有被注册（没有非默认实现）
-                        if (!_typeToInstance.ContainsKey(iface))
-                        {
-                            // 检查是否有多个默认实现
-                            var defaults = interfaceToDefaults[iface];
-                            if (defaults.Count > 1)
-                            {
-                                // 检查系统注册表中是否有选择
-                                var selectedImpl = settings?.GetSelectedImplementation(iface.FullName);
-                                if (selectedImpl != null && selectedImpl == type.FullName)
-                                {
-                                    shouldRegister = true;
-                                    break;
-                                }
-                                else if (selectedImpl == null)
-                                {
-                                    // 没有选择，使用第一个
-                                    if (defaults[0] == type)
-                                    {
-                                        Log.Warning($"接口 {iface.Name} 有多个默认实现，未指定选择，使用第一个: {type.Name}");
-                                        shouldRegister = true;
-                                        break;
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                // 只有一个默认实现，直接注册
-                                shouldRegister = true;
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                if (shouldRegister)
-                {
-                    try
-                    {
-                        Register(type);
-                    }
-                    catch (Exception e)
-                    {
-                        Log.Exception(e);
-                    }
-                }
-            }
-        }
-
-        #endregion
-
         #region 依赖排序
 
         /// <summary>
@@ -928,11 +795,11 @@ namespace Azathrix.Framework.Core
 
             visiting.Add(type);
 
-            var deps = type.GetCustomAttributes<DependsOnAttribute>();
-            var settings = SystemRegistrySettings.Instance;
+            var deps = type.GetCustomAttributes<RequireSystemAttribute>();
+            var settings = SystemRegistry.Instance;
             foreach (var dep in deps)
             {
-                // 找到实现该接口的类型，优先使用 SystemRegistrySettings 中指定的实现
+                // 找到实现该接口的类型，优先使用 SystemRegistry 中指定的实现
                 Type depType = null;
                 if (dep.DependencyType.IsInterface)
                 {
@@ -1186,7 +1053,7 @@ namespace Azathrix.Framework.Core
                 };
 
                 // 获取 DependsOn 依赖
-                var deps = type.GetCustomAttributes<DependsOnAttribute>();
+                var deps = type.GetCustomAttributes<RequireSystemAttribute>();
                 foreach (var dep in deps)
                 {
                     info.Dependencies.Add(dep.DependencyType);

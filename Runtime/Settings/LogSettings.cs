@@ -54,7 +54,7 @@ namespace Azathrix.Framework.Settings
     /// <summary>
     /// 日志系统配置
     /// </summary>
-    [SettingsPath("LogSettings")]
+    [SettingsName("LogSettings")]
     [ShowSetting("Log")]
     public class LogSettings : SettingsBase<LogSettings>
     {
