@@ -414,30 +414,46 @@ namespace Azathrix.Framework.Editor.Registry
                 width -= 18;
             }
 
-            if (status == ImplStatus.Missing)
+            // 构建选项列表（包含丢失的实现）
+            var options = new List<string>();
+            var typeNames = new List<string>();
+            int currentIndex = -1;
+
+            // 如果有丢失的选择，添加到列表开头
+            if (status == ImplStatus.Missing && !string.IsNullOrEmpty(selectedImpl))
             {
-                var missingName = selectedImpl?.Split('.').Last() ?? "?";
-                EditorGUILayout.LabelField($"{missingName} [丢失]", GUILayout.Width(width));
+                var missingName = selectedImpl.Split('.').Last();
+                options.Add($"{missingName} [丢失]");
+                typeNames.Add(selectedImpl);
+                currentIndex = 0;
             }
-            else if (row.implementations.Count > 1)
+
+            // 添加现有实现
+            foreach (var impl in row.implementations)
             {
-                var options = row.implementations.Select(e =>
-                {
-                    var label = e.displayName;
-                    if (e.isDefault) label += " [默认]";
-                    if (!e.enabled) label += " [禁用]";
-                    return label;
-                }).ToArray();
+                var label = impl.displayName;
+                if (impl.isDefault) label += " [默认]";
+                if (!impl.enabled) label += " [禁用]";
+                options.Add(label);
+                typeNames.Add(impl.typeName);
 
-                var currentIndex = row.implementations.FindIndex(e => e.typeName == selectedImpl);
-                var defaultIndex = row.implementations.FindIndex(e => e.isDefault);
-                if (defaultIndex < 0) defaultIndex = 0;
-                if (currentIndex < 0) currentIndex = defaultIndex;
+                if (impl.typeName == selectedImpl)
+                    currentIndex = options.Count - 1;
+            }
 
-                var newIndex = EditorGUILayout.Popup(currentIndex, options, GUILayout.Width(width));
-                if (newIndex != currentIndex && newIndex >= 0 && newIndex < row.implementations.Count)
+            // 如果没有选择，使用默认
+            if (currentIndex < 0 && row.implementations.Count > 0)
+            {
+                var defaultIdx = row.implementations.FindIndex(e => e.isDefault);
+                currentIndex = (status == ImplStatus.Missing ? 1 : 0) + (defaultIdx >= 0 ? defaultIdx : 0);
+            }
+
+            if (options.Count > 1)
+            {
+                var newIndex = EditorGUILayout.Popup(currentIndex, options.ToArray(), GUILayout.Width(width));
+                if (newIndex != currentIndex && newIndex >= 0 && newIndex < typeNames.Count)
                 {
-                    var newTypeName = row.implementations[newIndex].typeName;
+                    var newTypeName = typeNames[newIndex];
                     var existing = registry.interfaceSelections.FirstOrDefault(s => s.interfaceTypeName == row.interfaceEntry.typeName);
                     if (existing != null)
                         existing.selectedImplementation = newTypeName;
@@ -454,12 +470,9 @@ namespace Azathrix.Framework.Editor.Registry
                     Repaint();
                 }
             }
-            else if (row.implementations.Count == 1)
+            else if (options.Count == 1)
             {
-                var impl = row.implementations.First();
-                var label = impl.displayName;
-                if (!impl.enabled) label += " [禁用]";
-                EditorGUILayout.LabelField(label, GUILayout.Width(width));
+                EditorGUILayout.LabelField(options[0], GUILayout.Width(width));
             }
             else
             {
