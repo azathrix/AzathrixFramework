@@ -82,6 +82,14 @@ namespace Azathrix.Framework.Core.Startup
             if (_phases == null)
                 Refresh();
 
+            // 检查阶段列表是否为空
+            if (_phases == null || _phases.Count == 0)
+            {
+                Log.Error("[Startup] 没有可执行的启动阶段，请检查 PhaseRegistry 是否正确配置");
+                context.Aborted = true;
+                return;
+            }
+
             foreach (var phase in _phases)
             {
                 if (context.Aborted)

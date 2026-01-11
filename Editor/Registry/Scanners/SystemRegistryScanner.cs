@@ -93,7 +93,7 @@ namespace Azathrix.Framework.Editor.Registry
             // 验证：如果扫描结果为空但原来有数据，说明扫描失败，不更新
             if (newEntries.Count == 0 && registry.entries.Count > 0)
             {
-                Debug.LogWarning($"[SystemRegistryScanner] 扫描结果为空（原有 {registry.entries.Count} 条），跳过更新以保护现有数据");
+                // Debug.LogWarning($"[SystemRegistryScanner] 扫描结果为空（原有 {registry.entries.Count} 条），跳过更新以保护现有数据");
                 return;
             }
 

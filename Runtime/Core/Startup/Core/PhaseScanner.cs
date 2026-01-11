@@ -230,8 +230,22 @@ namespace Azathrix.Framework.Core.Startup
                 foreach (var entry in registry.GetEnabledEntries())
                 {
                     var hookType = entry.GetRuntimeType();
+                    if (hookType == null)
+                    {
+                        Log.Warning($"[PhaseScanner] 钩子类型 {entry.typeName} 无法加载，请刷新注册表");
+                        continue;
+                    }
+
                     var phaseType = entry.GetTargetPhaseType();
-                    if (hookType == null || phaseType == null) continue;
+                    if (phaseType == null)
+                    {
+                        // 检测旧资源缺少 targetPhaseAssembly 字段的情况
+                        if (string.IsNullOrEmpty(entry.targetPhaseAssembly))
+                            Log.Warning($"[PhaseScanner] 钩子 {entry.displayName} 缺少 targetPhaseAssembly，请刷新注册表 (Azathrix/Refresh All Registries)");
+                        else
+                            Log.Warning($"[PhaseScanner] 钩子 {entry.displayName} 的目标阶段 {entry.targetPhaseType} 无法加载");
+                        continue;
+                    }
 
                     try
                     {
