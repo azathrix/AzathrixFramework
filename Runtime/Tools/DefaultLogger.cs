@@ -65,19 +65,22 @@ namespace Azathrix.Framework.Tools
             if (_colorStack.Count > 0) _colorStack.Pop();
         }
 
+        [HideInCallstack]
         public void Verbose(object message, Object context = null, int colorStyle = 0)
         {
             if (!ShouldLog(LogLevel.Verbose)) return;
             LogInternal("Verbose", message, context, InfoColor(colorStyle));
         }
 
+        [HideInCallstack]
         public void Info(object message, Object context = null, int colorStyle = 0)
         {
             if (!ShouldLog(LogLevel.Info)) return;
             if (_colorStack.Count > 0) colorStyle = _colorStack.Peek();
             LogInternal("Info", message, context, InfoColor(colorStyle));
         }
- 
+
+        [HideInCallstack]
         public void Warning(object message, Object context = null)
         {
             if (!ShouldLog(LogLevel.Warning)) return;
@@ -85,6 +88,7 @@ namespace Azathrix.Framework.Tools
             UnityEngine.Debug.LogWarning(msg, context);
         }
 
+        [HideInCallstack]
         public void Error(object message, Object context = null)
         {
             if (!ShouldLog(LogLevel.Error)) return;
@@ -92,12 +96,14 @@ namespace Azathrix.Framework.Tools
             UnityEngine.Debug.LogError(msg, context);
         }
 
+        [HideInCallstack]
         public void Exception(Exception exception)
         {
             if (!ShouldLog(LogLevel.Error)) return;
             UnityEngine.Debug.LogException(exception);
         }
 
+        [HideInCallstack]
         public void Separator(object message = null, int colorStyle = 0, string separator = "★")
         {
             if (!ShouldLog(LogLevel.Info)) return;
@@ -125,6 +131,7 @@ namespace Azathrix.Framework.Tools
             UnityEngine.Debug.Log(output);
         }
 
+        [HideInCallstack]
         public void InfoWithTag(string tag, object message, Object context = null)
         {
             if (!ShouldLog(LogLevel.Info)) return;
@@ -136,6 +143,7 @@ namespace Azathrix.Framework.Tools
             UnityEngine.Debug.Log(output, context);
         }
 
+        [HideInCallstack]
         public void WarningWithTag(string tag, object message, Object context = null)
         {
             if (!ShouldLog(LogLevel.Warning)) return;
@@ -147,6 +155,7 @@ namespace Azathrix.Framework.Tools
             UnityEngine.Debug.LogWarning(output, context);
         }
 
+        [HideInCallstack]
         public void ErrorWithTag(string tag, object message, Object context = null)
         {
             if (!ShouldLog(LogLevel.Error)) return;
@@ -157,6 +166,7 @@ namespace Azathrix.Framework.Tools
             UnityEngine.Debug.LogError(output, context);
         }
 
+        [HideInCallstack]
         public void LogCollection(string name, IEnumerable collection, Object context = null, int colorStyle = 0)
         {
             if (!ShouldLog(LogLevel.Info)) return;
@@ -211,6 +221,7 @@ namespace Azathrix.Framework.Tools
             Info(_sb.ToString(), context, colorStyle);
         }
 
+        [HideInCallstack]
         private void LogInternal(string level, object message, Object context, Color msgColor)
         {
             var output = FormatMessage(level, message, TagColor, msgColor);
@@ -226,7 +237,6 @@ namespace Azathrix.Framework.Tools
 
         private string GetCallerInfo()
         {
-            // 跳过前2帧(GetCallerInfo和调用者)，不获取文件信息以提升性能
             var stackTrace = new StackTrace(2, false);
             for (int i = 0; i < Math.Min(stackTrace.FrameCount, 10); i++)
             {
@@ -234,7 +244,21 @@ namespace Azathrix.Framework.Tools
                 var method = frame?.GetMethod();
                 var type = method?.ReflectedType;
                 if (type != null && type != typeof(DefaultLogger) && type != typeof(Log))
-                    return $"{type.Name}.{method.Name}";
+                {
+                    var methodName = method.Name;
+                    var typeName = type.Name;
+
+                    // 处理 async 状态机：<OriginalMethodName>d__XX -> OriginalMethodName
+                    if (methodName == "MoveNext" && typeName.StartsWith("<") && typeName.Contains(">d__"))
+                    {
+                        var endIndex = typeName.IndexOf('>');
+                        if (endIndex > 1)
+                            methodName = typeName.Substring(1, endIndex - 1);
+                        typeName = type.DeclaringType?.Name ?? typeName;
+                    }
+
+                    return $"{typeName}.{methodName}";
+                }
             }
 
             return "";

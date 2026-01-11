@@ -3,6 +3,8 @@ using System.Collections;
 using System.Collections.Generic;
 using Azathrix.Framework.Core;
 using Azathrix.Framework.Interfaces;
+using UnityEngine;
+using ILogger = Azathrix.Framework.Interfaces.ILogger;
 using Object = UnityEngine.Object;
 
 namespace Azathrix.Framework.Tools
@@ -21,6 +23,7 @@ namespace Azathrix.Framework.Tools
         /// <summary>
         /// 输出详细日志
         /// </summary>
+        [HideInCallstack]
         public static void Verbose(object message, Object context = null, int colorStyle = 0)
         {
             Logger.Verbose(message, context, colorStyle);
@@ -29,6 +32,7 @@ namespace Azathrix.Framework.Tools
         /// <summary>
         /// 输出信息日志
         /// </summary>
+        [HideInCallstack]
         public static void Info(object message, Object context = null, int colorStyle = 0)
         {
             Logger.Info(message, context, colorStyle);
@@ -37,6 +41,7 @@ namespace Azathrix.Framework.Tools
         /// <summary>
         /// 输出警告日志
         /// </summary>
+        [HideInCallstack]
         public static void Warning(object message, Object context = null)
         {
             Logger.Warning(message, context);
@@ -45,6 +50,7 @@ namespace Azathrix.Framework.Tools
         /// <summary>
         /// 输出错误日志
         /// </summary>
+        [HideInCallstack]
         public static void Error(object message, Object context = null)
         {
             Logger.Error(message, context);
@@ -53,6 +59,7 @@ namespace Azathrix.Framework.Tools
         /// <summary>
         /// 输出异常日志
         /// </summary>
+        [HideInCallstack]
         public static void Exception(Exception exception)
         {
             Logger.Exception(exception);
@@ -61,6 +68,7 @@ namespace Azathrix.Framework.Tools
         /// <summary>
         /// 输出分隔线日志
         /// </summary>
+        [HideInCallstack]
         public static void Separator(object message = null, int colorStyle = 0, string separator = "★")
         {
             Logger.Separator(message, colorStyle, separator);
@@ -85,6 +93,7 @@ namespace Azathrix.Framework.Tools
         /// <summary>
         /// 输出带标签的信息日志
         /// </summary>
+        [HideInCallstack]
         public static void InfoWithTag(string tag, object message, Object context = null)
         {
             Logger.InfoWithTag(tag, message, context);
@@ -93,6 +102,7 @@ namespace Azathrix.Framework.Tools
         /// <summary>
         /// 输出带标签的警告日志
         /// </summary>
+        [HideInCallstack]
         public static void WarningWithTag(string tag, object message, Object context = null)
         {
             Logger.WarningWithTag(tag, message, context);
@@ -101,6 +111,7 @@ namespace Azathrix.Framework.Tools
         /// <summary>
         /// 输出带标签的错误日志
         /// </summary>
+        [HideInCallstack]
         public static void ErrorWithTag(string tag, object message, Object context = null)
         {
             Logger.ErrorWithTag(tag, message, context);
@@ -109,6 +120,7 @@ namespace Azathrix.Framework.Tools
         /// <summary>
         /// 输出集合内容日志
         /// </summary>
+        [HideInCallstack]
         public static void LogCollection(string name, IEnumerable collection, Object context = null, int colorStyle = 0)
         {
             Logger.LogCollection(name, collection, context, colorStyle);
@@ -117,6 +129,7 @@ namespace Azathrix.Framework.Tools
         /// <summary>
         /// 输出 List 内容日志
         /// </summary>
+        [HideInCallstack]
         public static void LogList<T>(string name, IList<T> list, Object context = null, int colorStyle = 0)
         {
             Logger.LogCollection(name, list, context, colorStyle);
@@ -125,6 +138,7 @@ namespace Azathrix.Framework.Tools
         /// <summary>
         /// 输出 Dictionary 内容日志
         /// </summary>
+        [HideInCallstack]
         public static void LogDict<TKey, TValue>(string name, IDictionary<TKey, TValue> dict, Object context = null, int colorStyle = 0)
         {
             Logger.LogCollection(name, (IEnumerable)dict, context, colorStyle);
