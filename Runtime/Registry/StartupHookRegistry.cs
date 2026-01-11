@@ -10,7 +10,15 @@ namespace Azathrix.Framework.Registry
     {
         public int order;
         public string targetPhaseType;
+        public string targetPhaseAssembly;
         public bool isBefore;
+
+        public Type GetTargetPhaseType()
+        {
+            if (string.IsNullOrEmpty(targetPhaseType) || string.IsNullOrEmpty(targetPhaseAssembly))
+                return null;
+            return Type.GetType($"{targetPhaseType}, {targetPhaseAssembly}");
+        }
     }
 
     [SettingsPath("StartupHookRegistry")]

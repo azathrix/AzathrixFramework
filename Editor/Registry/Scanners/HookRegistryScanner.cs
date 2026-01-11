@@ -58,6 +58,7 @@ namespace Azathrix.Framework.Editor.Registry
                             entry.displayName = type.Name;
                             entry.order = order;
                             entry.targetPhaseType = phaseType.FullName;
+                            entry.targetPhaseAssembly = phaseType.Assembly.GetName().Name;
                             entry.isBefore = isBefore;
 
                             newEntries.Add(entry);

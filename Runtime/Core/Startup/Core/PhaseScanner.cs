@@ -30,7 +30,7 @@ namespace Azathrix.Framework.Core.Startup
         /// </summary>
         public List<IStartupPhase> ScanPhases()
         {
-            // 优先从 PhaseRegistry 读取
+            // 从 PhaseRegistry 读取
             var registry = PhaseRegistry.Instance;
             if (registry != null && registry.entries.Count > 0)
             {
@@ -39,16 +39,13 @@ namespace Azathrix.Framework.Core.Startup
                     .Where(p => p != null)
                     .ToList();
 
-                if (phases.Count > 0)
-                {
-                    // Log.Info($"[PhaseScanner] 从 PhaseRegistry 加载 {phases.Count} 个阶段");
-                    return phases;
-                }
+                // Log.Info($"[PhaseScanner] 从 PhaseRegistry 加载 {phases.Count} 个阶段");
+                return phases;
             }
 
-            // Fallback: 反射扫描
-            Log.Warning("[PhaseScanner] PhaseRegistry 为空，使用反射扫描");
-            return ScanPhasesByReflection();
+            // 注册表为空，记录错误并返回空列表
+            Log.Error("[PhaseScanner] PhaseRegistry 为空或未初始化，无法加载阶段");
+            return new List<IStartupPhase>();
         }
 
         private IStartupPhase CreatePhase(Type type)
@@ -107,21 +104,17 @@ namespace Azathrix.Framework.Core.Startup
         /// </summary>
         public List<IBeforePhaseHook<TPhase>> ScanBeforeHooks<TPhase>() where TPhase : IStartupPhase
         {
-            // 优先从 HookRegistry 读取
+            // 从 HookRegistry 读取
             var registry = StartupHookRegistry.Instance;
             if (registry != null && registry.entries.Count > 0)
             {
-                var hooks = registry.GetBeforeHookTypes(typeof(TPhase).FullName)
+                return registry.GetBeforeHookTypes(typeof(TPhase).FullName)
                     .Select(t => CreateHook<IBeforePhaseHook<TPhase>>(t))
                     .Where(h => h != null)
                     .ToList();
-
-                if (hooks.Count > 0)
-                    return hooks;
             }
 
-            // Fallback
-            return ScanBeforeHooksByReflection<TPhase>();
+            return new List<IBeforePhaseHook<TPhase>>();
         }
 
         private List<IBeforePhaseHook<TPhase>> ScanBeforeHooksByReflection<TPhase>() where TPhase : IStartupPhase
@@ -162,21 +155,17 @@ namespace Azathrix.Framework.Core.Startup
         /// </summary>
         public List<IAfterPhaseHook<TPhase>> ScanAfterHooks<TPhase>() where TPhase : IStartupPhase
         {
-            // 优先从 HookRegistry 读取
+            // 从 HookRegistry 读取
             var registry = StartupHookRegistry.Instance;
             if (registry != null && registry.entries.Count > 0)
             {
-                var hooks = registry.GetAfterHookTypes(typeof(TPhase).FullName)
+                return registry.GetAfterHookTypes(typeof(TPhase).FullName)
                     .Select(t => CreateHook<IAfterPhaseHook<TPhase>>(t))
                     .Where(h => h != null)
                     .ToList();
-
-                if (hooks.Count > 0)
-                    return hooks;
             }
 
-            // Fallback
-            return ScanAfterHooksByReflection<TPhase>();
+            return new List<IAfterPhaseHook<TPhase>>();
         }
 
         private List<IAfterPhaseHook<TPhase>> ScanAfterHooksByReflection<TPhase>() where TPhase : IStartupPhase
@@ -234,14 +223,14 @@ namespace Azathrix.Framework.Core.Startup
             var beforeHooks = new Dictionary<Type, List<object>>();
             var afterHooks = new Dictionary<Type, List<object>>();
 
-            // 优先从 HookRegistry 读取
+            // 从 HookRegistry 读取
             var registry = StartupHookRegistry.Instance;
             if (registry != null && registry.entries.Count > 0)
             {
                 foreach (var entry in registry.GetEnabledEntries())
                 {
                     var hookType = entry.GetRuntimeType();
-                    var phaseType = Type.GetType(entry.targetPhaseType);
+                    var phaseType = entry.GetTargetPhaseType();
                     if (hookType == null || phaseType == null) continue;
 
                     try
@@ -264,13 +253,9 @@ namespace Azathrix.Framework.Core.Startup
                     beforeHooks[key] = beforeHooks[key].OrderBy(h => ((dynamic)h).Order).ToList();
                 foreach (var key in afterHooks.Keys.ToList())
                     afterHooks[key] = afterHooks[key].OrderBy(h => ((dynamic)h).Order).ToList();
-
-                if (beforeHooks.Count > 0 || afterHooks.Count > 0)
-                    return (beforeHooks, afterHooks);
             }
 
-            // Fallback: 反射扫描
-            return ScanAllHooksByReflection();
+            return (beforeHooks, afterHooks);
         }
 
         private (Dictionary<Type, List<object>> beforeHooks, Dictionary<Type, List<object>> afterHooks) ScanAllHooksByReflection()

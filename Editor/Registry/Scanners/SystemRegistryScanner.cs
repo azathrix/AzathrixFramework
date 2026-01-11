@@ -98,7 +98,7 @@ namespace Azathrix.Framework.Editor.Registry
             }
 
             // 记录更新信息
-            Debug.Log($"[SystemRegistryScanner] 更新注册表: {newEntries.Count} 个系统, {newInterfaceEntries.Count} 个接口");
+            // Debug.Log($"[SystemRegistryScanner] 更新注册表: {newEntries.Count} 个系统, {newInterfaceEntries.Count} 个接口");
 
             // 更新注册表
             registry.entries.Clear();

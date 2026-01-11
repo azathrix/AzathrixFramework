@@ -34,7 +34,7 @@ namespace Azathrix.Framework.Core
         /// <returns>扫描到的系统类型数组</returns>
         public async UniTask<Type[]> ScanAsync()
         {
-            // 优先从 SystemRegistry 读取
+            // 从 SystemRegistry 读取
             var registry = SystemRegistry.Instance;
             if (registry != null && registry.entries.Count > 0)
             {
@@ -42,17 +42,15 @@ namespace Azathrix.Framework.Core
                     .Where(t => IsValidSystemType(t))
                     .ToArray();
 
-                if (types.Length > 0)
-                {
-                    _logger.Info($"[Scanner] 从 SystemRegistry 加载 {types.Length} 个系统");
-                    await UniTask.Yield();
-                    return types;
-                }
+                _logger.Info($"[Scanner] 从 SystemRegistry 加载 {types.Length} 个系统");
+                await UniTask.Yield();
+                return types;
             }
 
-            // Fallback: 反射扫描
-            _logger.Warning("[Scanner] SystemRegistry 为空，使用反射扫描");
-            return await ScanByReflectionAsync();
+            // 注册表为空，记录错误并返回空数组
+            _logger.Error("[Scanner] SystemRegistry 为空或未初始化，无法加载系统");
+            await UniTask.Yield();
+            return Array.Empty<Type>();
         }
 
         /// <summary>

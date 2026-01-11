@@ -822,20 +822,29 @@ namespace Azathrix.Framework.Core
 
             var deps = type.GetCustomAttributes<RequireSystemAttribute>();
             var settings = SystemRegistry.Instance;
+
             foreach (var dep in deps)
             {
                 // 找到实现该接口的类型，优先使用 SystemRegistry 中指定的实现
                 Type depType = null;
                 if (dep.DependencyType.IsInterface)
                 {
+                    // 检查接口是否被禁用
+                    if (settings != null && !settings.IsInterfaceEnabled(dep.DependencyType.FullName))
+                    {
+                        Log.Warning($"[Register] 系统 {type.Name} 依赖的接口 {dep.DependencyType.Name} 已禁用，{type.Name} 也已禁用");
+                        visiting.Remove(type);
+                        disabled.Add(type);
+                        return;
+                    }
+
                     var selectedImpl = settings?.GetSelectedImplementation(dep.DependencyType.FullName);
                     if (!string.IsNullOrEmpty(selectedImpl))
                     {
                         // 检查选中的实现是否被禁用
                         if (settings.IsSystemDisabled(selectedImpl))
                         {
-                            if (!IsEditorMode)
-                                Log.Warning($"系统 {type.Name} 依赖的接口 {dep.DependencyType.Name} 实现 {selectedImpl.Split('.').Last()} 已禁用，{type.Name} 也已禁用");
+                            Log.Warning($"[Register] 系统 {type.Name} 依赖的接口 {dep.DependencyType.Name} 实现 {selectedImpl.Split('.').Last()} 已禁用，{type.Name} 也已禁用");
                             visiting.Remove(type);
                             disabled.Add(type);
                             return;
@@ -851,8 +860,7 @@ namespace Azathrix.Framework.Core
                     // 检查依赖是否在注册表中被禁用
                     if (settings != null && settings.IsSystemDisabled(depType.FullName))
                     {
-                        if (!IsEditorMode)
-                            Log.Warning($"系统 {type.Name} 依赖 {depType.Name} 在注册表中已禁用，{type.Name} 也已禁用");
+                        Log.Warning($"系统 {type.Name} 依赖 {depType.Name} 在注册表中已禁用，{type.Name} 也已禁用");
                         visiting.Remove(type);
                         disabled.Add(type);
                         return;
@@ -862,8 +870,7 @@ namespace Azathrix.Framework.Core
                     // 依赖被禁用，当前系统也禁用
                     if (disabled.Contains(depType))
                     {
-                        if (!IsEditorMode)
-                            Log.Warning($"系统 {type.Name} 依赖 {depType.Name} 已被禁用，{type.Name} 也已禁用");
+                        Log.Warning($"系统 {type.Name} 依赖 {depType.Name} 已被禁用，{type.Name} 也已禁用");
                         visiting.Remove(type);
                         disabled.Add(type);
                         return;
@@ -871,9 +878,16 @@ namespace Azathrix.Framework.Core
                 }
                 else
                 {
-                    // 依赖不存在，禁用当前系统
-                    if (!IsEditorMode)
-                        Log.Warning($"系统 {type.Name} 依赖 {dep.DependencyType.Name} 不存在，已禁用");
+                    // 依赖不存在，检查是否是因为被禁用
+                    var depTypeName = dep.DependencyType.FullName;
+                    if (settings != null && settings.IsSystemDisabled(depTypeName))
+                    {
+                        Log.Warning($"[Register] 系统 {type.Name} 依赖 {dep.DependencyType.Name} 已禁用，{type.Name} 也已禁用");
+                    }
+                    else
+                    {
+                        Log.Warning($"[Register] 系统 {type.Name} 依赖 {dep.DependencyType.Name} 不存在，{type.Name} 已禁用");
+                    }
                     visiting.Remove(type);
                     disabled.Add(type);
                     return;
