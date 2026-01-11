@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Azathrix.Framework.Core.Startup;
 using Azathrix.Framework.Interfaces;
@@ -22,9 +23,8 @@ namespace Azathrix.Framework.Editor.Registry
 
             var config = AzathrixFrameworkSettings.Instance?.ToScannerConfig();
             var existingEntries = registry.entries.ToDictionary(e => e.typeName);
-            registry.entries.Clear();
+            var newEntries = new List<StartupHookEntry>();
 
-            int count = 0;
             foreach (var assembly in ScannerHelper.GetAssemblies(config))
             {
                 foreach (var type in ScannerHelper.GetTypes(assembly))
@@ -50,20 +50,17 @@ namespace Azathrix.Framework.Editor.Registry
                             var hook = Activator.CreateInstance(type);
                             var order = ((dynamic)hook).Order;
 
-                            // 保留已有条目的用户配置
                             var entry = existingEntries.TryGetValue(type.FullName, out var existing)
                                 ? existing
                                 : new StartupHookEntry { typeName = type.FullName, enabled = true };
 
-                            // 更新扫描信息
                             entry.assemblyName = type.Assembly.GetName().Name;
                             entry.displayName = type.Name;
                             entry.order = order;
                             entry.targetPhaseType = phaseType.FullName;
                             entry.isBefore = isBefore;
 
-                            registry.entries.Add(entry);
-                            count++;
+                            newEntries.Add(entry);
                         }
                         catch (Exception e)
                         {
@@ -73,8 +70,16 @@ namespace Azathrix.Framework.Editor.Registry
                 }
             }
 
+            // 验证：如果扫描结果为空但原来有数据，跳过更新
+            if (newEntries.Count == 0 && registry.entries.Count > 0)
+            {
+                Debug.LogWarning("[HookRegistryScanner] 扫描结果为空，跳过更新以保护现有数据");
+                return;
+            }
+
+            registry.entries.Clear();
+            registry.entries.AddRange(newEntries);
             EditorUtility.SetDirty(registry);
-            // Debug.Log($"[HookRegistryScanner] 扫描完成，共 {count} 个钩子");
         }
     }
 }

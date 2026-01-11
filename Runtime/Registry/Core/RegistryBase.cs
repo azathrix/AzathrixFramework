@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Azathrix.Framework.Settings;
+using UnityEngine;
 
 namespace Azathrix.Framework.Registry
 {
@@ -9,6 +10,7 @@ namespace Azathrix.Framework.Registry
         where T : RegistryBase<T, TEntry>
         where TEntry : RegistryEntryBase
     {
+        [SerializeField]
         public List<TEntry> entries = new();
 
         private Dictionary<string, TEntry> _cache;

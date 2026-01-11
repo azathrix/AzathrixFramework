@@ -37,14 +37,16 @@ namespace Azathrix.Framework.Registry
         public string selectedImplementation;
     }
 
-    [SettingsName("SystemRegistry")]
+    [SettingsPath("SystemRegistry")]
     [ShowSetting("系统注册表")]
     public class SystemRegistry : RegistryBase<SystemRegistry, SystemEntry>
     {
         [Header("接口注册")]
+        [SerializeField]
         public List<InterfaceEntry> interfaceEntries = new();
 
         [Header("接口实现选择")]
+        [SerializeField]
         public List<InterfaceSelection> interfaceSelections = new();
 
         private Dictionary<string, string> _selectionCache;

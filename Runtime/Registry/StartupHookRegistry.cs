@@ -13,7 +13,7 @@ namespace Azathrix.Framework.Registry
         public bool isBefore;
     }
 
-    [SettingsName("StartupHookRegistry")]
+    [SettingsPath("StartupHookRegistry")]
     [ShowSetting("启动钩子注册表")]
     public class StartupHookRegistry : RegistryBase<StartupHookRegistry, StartupHookEntry>
     {

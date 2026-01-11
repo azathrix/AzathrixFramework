@@ -30,8 +30,8 @@ namespace Azathrix.Framework.Core
         public static bool IsSetup { get; private set; }
 
         public static EventDispatcher Dispatcher { get; private set; } = new();
-        public static ILogger Logger { get; private set; }
-        public static IResourcesLoader ResourcesLoader { get; private set; }
+        public static ILogger Logger { get; set; }
+        public static IResourcesLoader ResourcesLoader { get; set; }
         public static ScannerConfig ScannerConfig { get; private set; }
         public static RuntimeConfig RuntimeConfig { get; private set; }
 
@@ -94,10 +94,10 @@ namespace Azathrix.Framework.Core
 
             Logger ??= new DefaultLogger();
 
-            _editorPipeline = new StartupPipeline(Logger, scannerConfig)
+            _editorPipeline = new StartupPipeline(Logger, scannerConfig, isEditorMode: true)
             {
                 SilentMode = !settings.debugEditorPipeline
-            }; 
+            };
 
             var context = new PhaseContext
             {
@@ -160,8 +160,14 @@ namespace Azathrix.Framework.Core
                     var system = _editorRuntimeManager.GetAllSystems().FirstOrDefault(s => s.GetType() == type);
                     if (system is Interfaces.SystemEvents.ISystemEditorSupport editorSupport)
                     {
-                        try { editorSupport.OnEditorInitialize(); }
-                        catch (Exception e) { Debug.LogException(e); }
+                        try
+                        {
+                            editorSupport.OnEditorInitialize();
+                        }
+                        catch (Exception e)
+                        {
+                            Debug.LogException(e);
+                        }
                     }
                 }
             }
@@ -269,7 +275,8 @@ namespace Azathrix.Framework.Core
         }
 
         // 内部方法供阶段调用
-        internal static void SetupInternal(ILogger logger, IResourcesLoader resourcesLoader, ScannerConfig scannerConfig, RuntimeConfig runtimeConfig)
+        internal static void SetupInternal(ILogger logger, IResourcesLoader resourcesLoader,
+            ScannerConfig scannerConfig, RuntimeConfig runtimeConfig)
         {
             if (IsSetup) return;
 

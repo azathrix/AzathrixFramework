@@ -22,11 +22,12 @@ namespace Azathrix.Framework.Editor.Registry
             }
 
             var config = AzathrixFrameworkSettings.Instance?.ToScannerConfig();
+
+            // 先扫描到临时列表，验证后再更新
+            var newEntries = new List<SystemEntry>();
+            var newInterfaceEntries = new List<InterfaceEntry>();
             var existingEntries = registry.entries.ToDictionary(e => e.typeName);
             var existingInterfaces = registry.interfaceEntries.ToDictionary(e => e.typeName);
-            registry.entries.Clear();
-            registry.interfaceEntries.Clear();
-
             var interfaceImplementations = new Dictionary<string, List<string>>();
 
             foreach (var assembly in ScannerHelper.GetAssemblies(config))
@@ -48,7 +49,7 @@ namespace Azathrix.Framework.Editor.Registry
                         var ifacePriorityAttr = type.GetCustomAttribute<SystemPriorityAttribute>();
                         ifaceEntry.defaultPriority = ifacePriorityAttr?.Priority ?? 0;
 
-                        registry.interfaceEntries.Add(ifaceEntry);
+                        newInterfaceEntries.Add(ifaceEntry);
                         continue;
                     }
 
@@ -77,7 +78,7 @@ namespace Azathrix.Framework.Editor.Registry
                         .Select(d => d.DependencyType.FullName)
                         .ToList();
 
-                    registry.entries.Add(entry);
+                    newEntries.Add(entry);
 
                     // 记录接口实现
                     foreach (var iface in entry.interfaces)
@@ -88,6 +89,23 @@ namespace Azathrix.Framework.Editor.Registry
                     }
                 }
             }
+
+            // 验证：如果扫描结果为空但原来有数据，说明扫描失败，不更新
+            if (newEntries.Count == 0 && registry.entries.Count > 0)
+            {
+                Debug.LogWarning($"[SystemRegistryScanner] 扫描结果为空（原有 {registry.entries.Count} 条），跳过更新以保护现有数据");
+                return;
+            }
+
+            // 记录更新信息
+            Debug.Log($"[SystemRegistryScanner] 更新注册表: {newEntries.Count} 个系统, {newInterfaceEntries.Count} 个接口");
+
+            // 更新注册表
+            registry.entries.Clear();
+            registry.entries.AddRange(newEntries);
+
+            registry.interfaceEntries.Clear();
+            registry.interfaceEntries.AddRange(newInterfaceEntries);
 
             // 更新接口的实现列表
             foreach (var ifaceEntry in registry.interfaceEntries)

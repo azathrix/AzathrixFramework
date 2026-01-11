@@ -9,10 +9,10 @@ namespace Azathrix.Framework.Settings
     /// 设置路径特性，用于指定 Resources 下的路径
     /// </summary>
     [AttributeUsage(AttributeTargets.Class)]
-    public class SettingsNameAttribute : Attribute
+    public class SettingsPathAttribute : Attribute
     {
-        public string Name { get; }
-        public SettingsNameAttribute(string name) => Name = name;
+        public string Path { get; }
+        public SettingsPathAttribute(string path) => Path = path;
     }
 
     /// <summary>
@@ -29,8 +29,8 @@ namespace Azathrix.Framework.Settings
         /// </summary>
         public static string GetResourcePath()
         {
-            var attr = (SettingsNameAttribute) Attribute.GetCustomAttribute(typeof(T), typeof(SettingsNameAttribute));
-            return attr?.Name ?? typeof(T).Name;
+            var attr = (SettingsPathAttribute) Attribute.GetCustomAttribute(typeof(T), typeof(SettingsPathAttribute));
+            return attr?.Path ?? typeof(T).Name;
         }
 
         /// <summary>

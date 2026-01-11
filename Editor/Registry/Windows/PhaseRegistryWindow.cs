@@ -8,12 +8,12 @@ namespace Azathrix.Framework.Editor.Registry
 {
     public class PhaseRegistryWindow : RegistryWindowBase<PhaseRegistry, PhaseEntry>
     {
-        protected override string WindowTitle => "阶段注册表";
+        protected override string WindowTitle => "启动阶段注册表";
 
-        [MenuItem("Azathrix/注册表/阶段注册表")]
+        [MenuItem("Azathrix/注册表/启动阶段注册表")]
         public static void ShowWindow()
         {
-            var window = GetWindow<PhaseRegistryWindow>("阶段注册表");
+            var window = GetWindow<PhaseRegistryWindow>("启动阶段注册表");
             window.minSize = new Vector2(550, 400);
         }
 

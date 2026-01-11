@@ -256,27 +256,52 @@ namespace Azathrix.Framework.Core
 
             // 确定每个接口应该使用哪个实现
             // 优先级：SystemRegistry 配置 > 非默认 > 默认
+            // 注意：如果接口被禁用或选定实现被禁用，则不注册该接口
             var settings = SystemRegistry.Instance;
             var interfaceToSelectedImpl = new Dictionary<Type, Type>();
             foreach (var (iface, implementations) in interfaceToImplementations)
             {
+                // 检查接口是否被禁用
+                if (settings != null && !settings.IsInterfaceEnabled(iface.FullName))
+                    continue;
+
                 Type selected = null;
 
                 // 1. 检查 SystemRegistry 配置
                 var selectedImplName = settings?.GetSelectedImplementation(iface.FullName);
                 if (!string.IsNullOrEmpty(selectedImplName))
                 {
+                    // 检查配置的实现是否被禁用
+                    if (settings.IsSystemDisabled(selectedImplName))
+                    {
+                        if (!IsEditorMode)
+                            Log.Warning($"[Register] 接口 {iface.Name} 的配置实现 {selectedImplName.Split('.').Last()} 已禁用，跳过注册");
+                        continue;
+                    }
+
                     selected = implementations.FirstOrDefault(t => t.FullName == selectedImplName);
+                    if (selected == null)
+                    {
+                        if (!IsEditorMode)
+                            Log.Warning($"[Register] 接口 {iface.Name} 的配置实现 {selectedImplName.Split('.').Last()} 已丢失，跳过注册");
+                        continue;
+                    }
                 }
 
-                // 2. 如果没有配置或配置的实现不存在，选择第一个非默认实现
+                // 2. 如果没有配置，选择第一个未禁用的非默认实现
                 if (selected == null)
                 {
-                    selected = implementations.FirstOrDefault(t => !defaultTypes.Contains(t));
+                    selected = implementations.FirstOrDefault(t =>
+                        !defaultTypes.Contains(t) &&
+                        (settings == null || !settings.IsSystemDisabled(t.FullName)));
                 }
 
-                // 3. 如果没有非默认实现，选择第一个默认实现
-                selected ??= implementations.FirstOrDefault();
+                // 3. 如果没有非默认实现，选择第一个未禁用的默认实现
+                if (selected == null)
+                {
+                    selected = implementations.FirstOrDefault(t =>
+                        settings == null || !settings.IsSystemDisabled(t.FullName));
+                }
 
                 if (selected != null)
                     interfaceToSelectedImpl[iface] = selected;

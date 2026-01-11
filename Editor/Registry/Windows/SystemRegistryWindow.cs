@@ -233,7 +233,7 @@ namespace Azathrix.Framework.Editor.Registry
                 DrawSystemPriorityCell(registry, row.entry, fallbackPriority, columns[1].width + SplitterWidth);
 
                 // 类型
-                GUI.color = new Color(0.6f, 0.9f, 0.6f);
+                GUI.color = row.enabled ? new Color(0.6f, 0.9f, 0.6f) : Color.gray;
                 EditorGUILayout.LabelField("[系统]", GUILayout.Width(columns[2].width + SplitterWidth));
                 GUI.color = row.enabled ? Color.white : Color.gray;
 
@@ -249,22 +249,38 @@ namespace Azathrix.Framework.Editor.Registry
             }
             else
             {
+                // 接口行 - 检查实现状态
+                var implStatus = GetImplementationStatus(registry, row);
+
+                // 根据状态设置整行颜色（在绘制任何内容之前）
+                Color rowColor;
+                if (!row.enabled)
+                    rowColor = Color.gray;
+                else if (implStatus == ImplStatus.Missing)
+                    rowColor = new Color(1f, 0.5f, 0.5f);
+                else if (implStatus == ImplStatus.Disabled)
+                    rowColor = new Color(1f, 0.85f, 0.5f);
+                else
+                    rowColor = Color.white;
+
+                GUI.color = rowColor;
+
                 // 接口行 - 启用开关
                 DrawInterfaceEnableToggle(registry, row.interfaceEntry, columns[0].width + SplitterWidth);
 
                 // 优先级 - 接口
                 DrawInterfacePriorityCell(registry, row.interfaceEntry, columns[1].width + SplitterWidth);
 
-                // 类型
-                GUI.color = new Color(0.6f, 0.8f, 1f);
+                // 类型 - 正常时蓝色，有警告状态时使用行颜色
+                GUI.color = (row.enabled && implStatus == ImplStatus.Normal) ? new Color(0.6f, 0.8f, 1f) : rowColor;
                 EditorGUILayout.LabelField("[接口]", GUILayout.Width(columns[2].width + SplitterWidth));
-                GUI.color = row.enabled ? Color.white : Color.gray;
+                GUI.color = rowColor;
 
                 // 名称
                 EditorGUILayout.LabelField(row.name, GUILayout.Width(columns[3].width + SplitterWidth));
 
                 // 实现列
-                DrawImplementationSelector(registry, row);
+                DrawImplementationSelector(registry, row, implStatus);
 
                 // 依赖列显示实现数量
                 EditorGUILayout.LabelField($"实现: {row.implementations.Count}");
@@ -273,22 +289,58 @@ namespace Azathrix.Framework.Editor.Registry
             EndRow();
         }
 
-        private void DrawImplementationSelector(SystemRegistry registry, RowData row)
-        {
-            if (row.implementations.Count > 1)
-            {
-                // 多个实现：显示下拉选择框
-                var options = row.implementations.Select(e => e.displayName + (e.isDefault ? " [默认]" : "")).ToArray();
-                var selectedImpl = registry.GetSelectedImplementation(row.interfaceEntry.typeName);
-                var currentIndex = row.implementations.FindIndex(e => e.typeName == selectedImpl);
+        private enum ImplStatus { Normal, Disabled, Missing }
 
-                // 找默认选中项
+        private ImplStatus GetImplementationStatus(SystemRegistry registry, RowData row)
+        {
+            var selectedImpl = registry.GetSelectedImplementation(row.interfaceEntry.typeName);
+
+            // 如果没有配置，找当前实际使用的实现（默认或第一个）
+            if (string.IsNullOrEmpty(selectedImpl) && row.implementations.Count > 0)
+            {
+                var defaultImpl = row.implementations.FirstOrDefault(e => e.isDefault) ?? row.implementations.First();
+                if (!defaultImpl.enabled)
+                    return ImplStatus.Disabled;
+                return ImplStatus.Normal;
+            }
+
+            if (string.IsNullOrEmpty(selectedImpl))
+                return ImplStatus.Normal;
+
+            var selectedEntry = registry.entries.FirstOrDefault(e => e.typeName == selectedImpl);
+            if (selectedEntry == null)
+                return ImplStatus.Missing;
+            if (!selectedEntry.enabled)
+                return ImplStatus.Disabled;
+            return ImplStatus.Normal;
+        }
+
+        private void DrawImplementationSelector(SystemRegistry registry, RowData row, ImplStatus status)
+        {
+            var selectedImpl = registry.GetSelectedImplementation(row.interfaceEntry.typeName);
+            var width = columns[4].width + SplitterWidth;
+
+            if (status == ImplStatus.Missing)
+            {
+                var missingName = selectedImpl?.Split('.').Last() ?? "?";
+                EditorGUILayout.LabelField($"⚠ {missingName} [丢失]", GUILayout.Width(width));
+            }
+            else if (row.implementations.Count > 1)
+            {
+                var options = row.implementations.Select(e =>
+                {
+                    var label = e.displayName;
+                    if (e.isDefault) label += " [默认]";
+                    if (!e.enabled) label += " [禁用]";
+                    return label;
+                }).ToArray();
+
+                var currentIndex = row.implementations.FindIndex(e => e.typeName == selectedImpl);
                 var defaultIndex = row.implementations.FindIndex(e => e.isDefault);
                 if (defaultIndex < 0) defaultIndex = 0;
-
                 if (currentIndex < 0) currentIndex = defaultIndex;
 
-                var newIndex = EditorGUILayout.Popup(currentIndex, options, GUILayout.Width(columns[4].width + SplitterWidth));
+                var newIndex = EditorGUILayout.Popup(currentIndex, options, GUILayout.Width(width));
                 if (newIndex != currentIndex && newIndex >= 0 && newIndex < row.implementations.Count)
                 {
                     var newTypeName = row.implementations[newIndex].typeName;
@@ -305,16 +357,19 @@ namespace Azathrix.Framework.Editor.Registry
                     }
                     registry.ClearSelectionCache();
                     EditorUtility.SetDirty(registry);
+                    Repaint();
                 }
             }
             else if (row.implementations.Count == 1)
             {
                 var impl = row.implementations.First();
-                EditorGUILayout.LabelField(impl.displayName, GUILayout.Width(columns[4].width + SplitterWidth));
+                var label = impl.displayName;
+                if (!impl.enabled) label += " [禁用]";
+                EditorGUILayout.LabelField(label, GUILayout.Width(width));
             }
             else
             {
-                EditorGUILayout.LabelField("-", GUILayout.Width(columns[4].width + SplitterWidth));
+                EditorGUILayout.LabelField("-", GUILayout.Width(width));
             }
         }
 
@@ -477,6 +532,7 @@ namespace Azathrix.Framework.Editor.Registry
             {
                 entry.enabled = newEnabled;
                 EditorUtility.SetDirty(registry);
+                Repaint();
             }
         }
     }

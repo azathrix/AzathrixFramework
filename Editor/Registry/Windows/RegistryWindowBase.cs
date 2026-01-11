@@ -258,6 +258,7 @@ namespace Azathrix.Framework.Editor.Registry
             {
                 entry.enabled = newEnabled;
                 EditorUtility.SetDirty(registry);
+                Repaint();
             }
             return newEnabled;
         }

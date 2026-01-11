@@ -18,6 +18,7 @@ namespace Azathrix.Framework.Core.Startup
         private readonly ILogger _logger;
         private readonly ScannerConfig _config;
         private readonly PhaseScanner _scanner;
+        private readonly bool _isEditorMode;
 
         private List<IStartupPhase> _phases;
         private Dictionary<Type, List<object>> _beforeHooks;
@@ -28,11 +29,12 @@ namespace Azathrix.Framework.Core.Startup
         /// </summary>
         public bool SilentMode { get; set; }
 
-        public StartupPipeline(ILogger logger, ScannerConfig config)
+        public StartupPipeline(ILogger logger, ScannerConfig config, bool isEditorMode = false)
         {
             _logger = logger;
             _config = config;
-            _scanner = new PhaseScanner(logger, config);
+            _isEditorMode = isEditorMode;
+            _scanner = new PhaseScanner(logger, config, isEditorMode);
         }
 
         #region 静态 Hook 管理
@@ -91,8 +93,14 @@ namespace Azathrix.Framework.Core.Startup
 
                 var phaseType = phase.GetType();
 
-                // 编辑器模式下只执行带有 EditorSupport 特性的阶段
-                if (context.IsEditor && phaseType.GetCustomAttribute<EditorSupportAttribute>() == null)
+                // 编辑器模式下只执行带有 EditorSupport 或 EditorOnly 特性的阶段
+                if (context.IsEditor &&
+                    phaseType.GetCustomAttribute<EditorSupportAttribute>() == null &&
+                    phaseType.GetCustomAttribute<EditorOnlyAttribute>() == null)
+                    continue;
+
+                // 运行时模式下跳过 EditorOnly 阶段
+                if (!context.IsEditor && phaseType.GetCustomAttribute<EditorOnlyAttribute>() != null)
                     continue;
 
                 var phaseId = phase.Id;

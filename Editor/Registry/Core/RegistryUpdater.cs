@@ -8,21 +8,31 @@ namespace Azathrix.Framework.Editor.Registry
         [InitializeOnLoadMethod]
         static void Initialize()
         {
-            // 编辑器启动时延迟刷新
-            EditorApplication.delayCall += UpdateAllRegistries;
+            // 编辑器启动时延迟刷新，确保所有程序集都已加载
+            EditorApplication.delayCall += () =>
+            {
+                // 如果正在编译，不执行扫描
+                if (EditorApplication.isCompiling)
+                    return;
+                UpdateAllRegistries();
+            };
         }
 
         [MenuItem("Azathrix/注册表/刷新注册表")]
         public static void UpdateAllRegistries()
         {
-            // Debug.Log("[RegistryUpdater] 开始更新所有注册表...");
+            // 如果正在编译，不执行扫描
+            if (EditorApplication.isCompiling)
+            {
+                Debug.LogWarning("[RegistryUpdater] 正在编译中，跳过扫描");
+                return;
+            }
 
             SystemRegistryScanner.Scan();
             PhaseRegistryScanner.Scan();
             HookRegistryScanner.Scan();
 
             AssetDatabase.SaveAssets();
-            // Debug.Log("[RegistryUpdater] 注册表更新完成");
         }
     }
 }

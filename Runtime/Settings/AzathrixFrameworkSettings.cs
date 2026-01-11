@@ -33,7 +33,7 @@ namespace Azathrix.Framework.Settings
     /// <summary>
     /// 框架配置
     /// </summary>
-    [SettingsName("AzathrixFrameworkSettings")]
+    [SettingsPath("AzathrixFrameworkSettings")]
     [ShowSetting("框架设置")]
     public class AzathrixFrameworkSettings : SettingsBase<AzathrixFrameworkSettings>
     {

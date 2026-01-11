@@ -14,7 +14,7 @@ namespace Azathrix.Framework.Registry
         public bool editorOnly;     // 仅编辑器（只在编辑器执行，运行时不执行）
     }
 
-    [SettingsName("PhaseRegistry")]
+    [SettingsPath("PhaseRegistry")]
     [ShowSetting("阶段注册表")]
     public class PhaseRegistry : RegistryBase<PhaseRegistry, PhaseEntry>
     {
