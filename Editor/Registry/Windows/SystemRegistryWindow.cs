@@ -225,6 +225,22 @@ namespace Azathrix.Framework.Editor.Registry
 
             if (row.type == "系统")
             {
+                // 系统行 - 检查依赖状态
+                var depStatus = GetDependencyStatus(registry, row.entry);
+
+                // 根据状态设置整行颜色
+                Color rowColor;
+                if (!row.enabled)
+                    rowColor = Color.gray;
+                else if (depStatus == DepStatus.Missing)
+                    rowColor = new Color(1f, 0.5f, 0.5f);
+                else if (depStatus == DepStatus.Disabled)
+                    rowColor = new Color(1f, 0.85f, 0.5f);
+                else
+                    rowColor = Color.white;
+
+                GUI.color = rowColor;
+
                 // 系统行
                 DrawEnableToggle(registry, row.entry, columns[0].width + SplitterWidth);
 
@@ -233,9 +249,9 @@ namespace Azathrix.Framework.Editor.Registry
                 DrawSystemPriorityCell(registry, row.entry, fallbackPriority, columns[1].width + SplitterWidth);
 
                 // 类型
-                GUI.color = row.enabled ? new Color(0.6f, 0.9f, 0.6f) : Color.gray;
+                GUI.color = (row.enabled && depStatus == DepStatus.Normal) ? new Color(0.6f, 0.9f, 0.6f) : rowColor;
                 EditorGUILayout.LabelField("[系统]", GUILayout.Width(columns[2].width + SplitterWidth));
-                GUI.color = row.enabled ? Color.white : Color.gray;
+                GUI.color = rowColor;
 
                 // 名称
                 var nameLabel = row.entry.isDefault ? $"{row.name} [默认]" : row.name;
@@ -245,7 +261,7 @@ namespace Azathrix.Framework.Editor.Registry
                 EditorGUILayout.LabelField(row.interfaces, GUILayout.Width(columns[4].width + SplitterWidth));
 
                 // 依赖
-                EditorGUILayout.LabelField(row.dependencies);
+                DrawDependencies(registry, row.entry, depStatus);
             }
             else
             {
@@ -290,6 +306,77 @@ namespace Azathrix.Framework.Editor.Registry
         }
 
         private enum ImplStatus { Normal, Disabled, Missing }
+        private enum DepStatus { Normal, Disabled, Missing }
+
+        private DepStatus GetDependencyStatus(SystemRegistry registry, SystemEntry entry)
+        {
+            if (entry.dependencies.Count == 0)
+                return DepStatus.Normal;
+
+            foreach (var depTypeName in entry.dependencies)
+            {
+                var depEntry = registry.entries.FirstOrDefault(e => e.typeName == depTypeName);
+
+                // 如果依赖是接口，检查接口的实现
+                if (depEntry == null)
+                {
+                    var ifaceEntry = registry.interfaceEntries.FirstOrDefault(e => e.typeName == depTypeName);
+                    if (ifaceEntry != null)
+                    {
+                        // 检查接口是否被禁用
+                        if (!ifaceEntry.enabled)
+                            return DepStatus.Disabled;
+
+                        // 检查接口的选中实现
+                        var selectedImpl = registry.GetSelectedImplementation(depTypeName);
+                        if (!string.IsNullOrEmpty(selectedImpl))
+                        {
+                            var implEntry = registry.entries.FirstOrDefault(e => e.typeName == selectedImpl);
+                            if (implEntry == null)
+                                return DepStatus.Missing;
+                            if (!implEntry.enabled)
+                                return DepStatus.Disabled;
+                        }
+                        else
+                        {
+                            // 没有配置，检查默认实现
+                            var impls = registry.entries.Where(e => e.interfaces.Contains(depTypeName)).ToList();
+                            var defaultImpl = impls.FirstOrDefault(e => e.isDefault) ?? impls.FirstOrDefault();
+                            if (defaultImpl == null)
+                                return DepStatus.Missing;
+                            if (!defaultImpl.enabled)
+                                return DepStatus.Disabled;
+                        }
+                        continue;
+                    }
+                    return DepStatus.Missing;
+                }
+
+                if (!depEntry.enabled)
+                    return DepStatus.Disabled;
+            }
+
+            return DepStatus.Normal;
+        }
+
+        private void DrawDependencies(SystemRegistry registry, SystemEntry entry, DepStatus status)
+        {
+            if (entry.dependencies.Count == 0)
+            {
+                EditorGUILayout.LabelField("-");
+                return;
+            }
+
+            var deps = entry.dependencies.Select(d => d.Split('.').Last());
+            var label = string.Join(", ", deps);
+
+            if (status == DepStatus.Missing)
+                label = "⚠ " + label + " [丢失]";
+            else if (status == DepStatus.Disabled)
+                label = "⚠ " + label + " [禁用]";
+
+            EditorGUILayout.LabelField(label);
+        }
 
         private ImplStatus GetImplementationStatus(SystemRegistry registry, RowData row)
         {
@@ -320,10 +407,17 @@ namespace Azathrix.Framework.Editor.Registry
             var selectedImpl = registry.GetSelectedImplementation(row.interfaceEntry.typeName);
             var width = columns[4].width + SplitterWidth;
 
+            // 显示警告图标
+            if (status == ImplStatus.Missing || status == ImplStatus.Disabled)
+            {
+                EditorGUILayout.LabelField("⚠", GUILayout.Width(16));
+                width -= 18;
+            }
+
             if (status == ImplStatus.Missing)
             {
                 var missingName = selectedImpl?.Split('.').Last() ?? "?";
-                EditorGUILayout.LabelField($"⚠ {missingName} [丢失]", GUILayout.Width(width));
+                EditorGUILayout.LabelField($"{missingName} [丢失]", GUILayout.Width(width));
             }
             else if (row.implementations.Count > 1)
             {
