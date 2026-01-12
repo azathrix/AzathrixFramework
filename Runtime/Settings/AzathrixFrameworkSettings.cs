@@ -37,6 +37,32 @@ namespace Azathrix.Framework.Settings
     [ShowSetting("框架设置")]
     public class AzathrixFrameworkSettings : SettingsBase<AzathrixFrameworkSettings>
     {
+        [Header("项目配置")]
+        [Tooltip("项目ID（用于资源路径等）")]
+        public string projectId = "NewGame";
+
+        [Header("版本配置")]
+        [Tooltip("版本格式")]
+        public string versionFormat = "{major}.{minor}.{patch}";
+        public int majorVersion = 1;
+        public int minorVersion = 0;
+        public int patchVersion = 0;
+        public int buildNumber = 1;
+
+        /// <summary>
+        /// 获取游戏版本
+        /// </summary>
+        public string Version => versionFormat
+            .Replace("{major}", majorVersion.ToString())
+            .Replace("{minor}", minorVersion.ToString())
+            .Replace("{patch}", patchVersion.ToString())
+            .Replace("{build}", buildNumber.ToString());
+
+        /// <summary>
+        /// 获取完整版本（含 build number）
+        /// </summary>
+        public string FullVersion => $"{Version}.{buildNumber}";
+
         [Header("扫描配置")] [Tooltip("扫描模式")] public ScanMode scanMode = ScanMode.All;
 
         [Tooltip("要扫描的程序集名称（ScanMode.Specified 时生效）")]
@@ -56,7 +82,7 @@ namespace Azathrix.Framework.Settings
         [Header("Runtime 配置")] [Tooltip("是否启用性能统计")]
         public bool enableProfiling;
 
-        [Header("初始化配置")] [Tooltip("是否自动初始化（运行时进入 Play 模式自动初始化）")]
+        [Header("初始化配置")] [Tooltip("自动初始化框架")]
         public bool autoInitialize = true;
 
         [Header("日志配置")]
@@ -95,6 +121,17 @@ namespace Azathrix.Framework.Settings
                 EnableProfiling = enableProfiling
             };
         }
+
+#if UNITY_EDITOR
+        /// <summary>
+        /// 保存设置
+        /// </summary>
+        public void Save()
+        {
+            UnityEditor.EditorUtility.SetDirty(this);
+            UnityEditor.AssetDatabase.SaveAssetIfDirty(this);
+        }
+#endif
 
     }
 }
