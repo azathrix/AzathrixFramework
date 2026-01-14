@@ -7,15 +7,16 @@ using System.Diagnostics;
 using System.Linq;
 using Azathrix.Framework.Core.Configs;
 using Azathrix.Framework.Core.Startup;
-using Azathrix.Framework.Events.Core;
 using Azathrix.Framework.Interfaces;
 using Azathrix.Framework.Registry;
 using Azathrix.Framework.Settings;
 using Azathrix.Framework.Tools;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.UIElements;
 using Application = UnityEngine.Application;
 using Debug = UnityEngine.Debug;
+using EventDispatcher = Azathrix.Framework.Events.Core.EventDispatcher;
 using ILogger = Azathrix.Framework.Interfaces.ILogger;
 
 namespace Azathrix.Framework.Core

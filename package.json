@@ -1,7 +1,7 @@
 {
     "name": "com.azathrix.framework",
     "displayName": "Azathrix Framework",
-    "version": "0.0.5",
+    "version": "0.0.7",
     "unity": "6000.3",
     "description": "Unity 模块化游戏框架。提供系统管理、事件分发、依赖注入等核心功能，支持自动注册、生命周期管理和编辑器扩展。",
     "license": "MIT",

@@ -1,0 +1,24 @@
+{
+    "name": "Azathrix.EventDispatcher.Tests",
+    "rootNamespace": "Azathrix.EventDispatcher.Tests",
+    "references": [
+        "Azathrix.Framework.Runtime",
+        "UniTask",
+        "UnityEngine.TestRunner"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
