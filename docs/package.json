@@ -2,9 +2,9 @@
   "name": "azathrix-framework-docs",
   "version": "1.0.0",
   "scripts": {
-    "dev": "npx vitepress dev",
-    "build": "npx vitepress build",
-    "preview": "npx vitepress preview"
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview"
   },
   "devDependencies": {
     "vitepress": "^1.5.0"
