@@ -4,7 +4,7 @@
 
 ## 系统注册表
 
-打开 `Azathrix > System Registry`
+打开 `Azathrix > 注册表 > 系统注册表`
 
 ### 功能
 
@@ -29,7 +29,7 @@ public class YooAssetResourcesSystem : IResourcesSystem { }
 
 ## 阶段注册表
 
-打开 `Azathrix > Phase Registry`
+打开 `Azathrix > 注册表 > 启动阶段注册表`
 
 - 查看所有启动阶段
 - 启用/禁用阶段
@@ -37,11 +37,17 @@ public class YooAssetResourcesSystem : IResourcesSystem { }
 
 ## 钩子注册表
 
-打开 `Azathrix > Hook Registry`
+打开 `Azathrix > 注册表 > 启动钩子注册表`
 
 - 查看所有启动钩子
 - 启用/禁用钩子
 - 查看钩子绑定的阶段
+
+## 刷新注册表
+
+打开 `Azathrix > 注册表 > 刷新注册表`
+
+手动扫描项目并更新注册表数据。
 
 ## 注册表存储
 

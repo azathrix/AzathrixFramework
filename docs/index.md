@@ -14,7 +14,7 @@ hero:
       link: /api/
     - theme: alt
       text: GitHub
-      link: https://github.com/AzathrixDev/com.azathrix.framework
+      link: https://github.com/azathrix/AzathrixFramework
 
 features:
   - icon: 🏗️

@@ -6,11 +6,12 @@
 
 | 菜单路径 | 说明 |
 |----------|------|
-| `Azathrix > Settings` | 框架设置面板 |
-| `Azathrix > System Registry` | 系统注册表管理 |
-| `Azathrix > Phase Registry` | 阶段注册表管理 |
-| `Azathrix > Hook Registry` | 钩子注册表管理 |
-| `Azathrix > System Monitor` | 运行时系统监控 |
+| `Azathrix > 设置` | 框架设置面板 |
+| `Azathrix > 注册表 > 系统注册表` | 系统注册表管理 |
+| `Azathrix > 注册表 > 启动阶段注册表` | 阶段注册表管理 |
+| `Azathrix > 注册表 > 启动钩子注册表` | 钩子注册表管理 |
+| `Azathrix > 注册表 > 刷新注册表` | 手动刷新注册表 |
+| `Azathrix > 调试分析 > 系统监视器` | 运行时系统监控 |
 
 ## 框架设置
 
@@ -29,7 +30,7 @@
 
 ## 系统监控
 
-`Azathrix > System Monitor`
+`Azathrix > 调试分析 > 系统监视器`
 
 运行时查看：
 
@@ -40,28 +41,29 @@
 
 ## 编辑器模式支持
 
-系统可以在编辑器模式下运行：
+系统可以在编辑器模式下运行，需要实现 `ISystemEditorSupport` 接口：
 
 ```csharp
 public class EditorToolSystem : ISystem, ISystemEditorSupport
 {
     public void OnEditorInitialize()
     {
-        // 编辑器初始化
-    }
-
-    public void OnEditorUpdate()
-    {
-        // 编辑器更新
+        // 编辑器初始化时调用
     }
 }
 ```
 
-使用 `[EditorSupport]` 标记系统支持编辑器模式：
+使用 `[EditorSupport]` 标记阶段支持编辑器模式：
 
 ```csharp
 [EditorSupport]
-public class MyEditorSystem : ISystem { }
+public class MyEditorPhase : IPhase
+{
+    public async UniTask ExecuteAsync(PhaseContext context)
+    {
+        // 编辑器模式下也会执行
+    }
+}
 ```
 
 ## 调试日志
