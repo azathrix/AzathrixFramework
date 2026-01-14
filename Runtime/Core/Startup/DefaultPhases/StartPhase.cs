@@ -14,7 +14,7 @@ namespace Azathrix.Framework.Core.Startup.DefaultPhases
 
         public UniTask ExecuteAsync(PhaseContext context)
         {
-            AzathrixFramework.Dispatcher.SendDefault<SystemEventDefines.OnGameInitialized>();
+            AzathrixFramework.Dispatcher.Dispatch<OnGameInitialized>(new OnGameInitialized());
             AzathrixFramework.SetStarted(true);
 
             Log.Separator("启动完成");
