@@ -4,7 +4,7 @@ export default defineConfig({
   title: 'Azathrix Framework',
   description: 'Unity 模块化游戏框架',
   lang: 'zh-CN',
-  base: '/com.azathrix.framework/',
+  base: '/AzathrixFramework/',
 
   head: [
     ['link', { rel: 'icon', href: '/favicon.ico' }]
@@ -17,7 +17,7 @@ export default defineConfig({
       { text: '首页', link: '/' },
       { text: '教程', link: '/guide/' },
       { text: 'API', link: '/api/' },
-      { text: 'GitHub', link: 'https://github.com/AzathrixDev/com.azathrix.framework' }
+      { text: 'GitHub', link: 'https://github.com/azathrix/AzathrixFramework' }
     ],
 
     sidebar: {
@@ -63,7 +63,7 @@ export default defineConfig({
     },
 
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/AzathrixDev/com.azathrix.framework' }
+      { icon: 'github', link: 'https://github.com/azathrix/AzathrixFramework' }
     ],
 
     footer: {
