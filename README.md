@@ -9,17 +9,17 @@
 </p>
 
 <p align="center">
-  <a href="https://azathrixdev.github.io/com.azathrix.framework/"><img src="https://img.shields.io/badge/文档-官网-blue.svg" alt="Docs"></a>
-  <a href="https://github.com/AzathrixDev/com.azathrix.framework"><img src="https://img.shields.io/badge/GitHub-Azathrix-black.svg" alt="GitHub"></a>
+  <a href="https://azathrix.github.io/AzathrixFramework/"><img src="https://img.shields.io/badge/文档-官网-blue.svg" alt="Docs"></a>
+  <a href="https://github.com/azathrix/AzathrixFramework"><img src="https://img.shields.io/badge/GitHub-Azathrix-black.svg" alt="GitHub"></a>
   <a href="https://www.npmjs.com/package/com.azathrix.framework"><img src="https://img.shields.io/npm/v/com.azathrix.framework.svg" alt="npm"></a>
   <a href="#license"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
   <a href="https://unity.com/"><img src="https://img.shields.io/badge/Unity-6000.3+-black.svg" alt="Unity"></a>
 </p>
 
 <p align="center">
-  <a href="https://azathrixdev.github.io/com.azathrix.framework/">📖 官网文档</a> •
-  <a href="https://azathrixdev.github.io/com.azathrix.framework/guide/">📚 教程</a> •
-  <a href="https://azathrixdev.github.io/com.azathrix.framework/api/">📋 API 参考</a>
+  <a href="https://azathrix.github.io/AzathrixFramework/">📖 官网文档</a> •
+  <a href="https://azathrix.github.io/AzathrixFramework/guide/">📚 教程</a> •
+  <a href="https://azathrix.github.io/AzathrixFramework/api/">📋 API 参考</a>
 </p>
 
 ---
@@ -52,7 +52,7 @@
 
 1. 打开 `Window > Package Manager`
 2. 点击 `+` > `Add package from git URL...`
-3. 输入：`https://github.com/AzathrixDev/com.azathrix.framework.git#latest`
+3. 输入：`https://github.com/azathrix/AzathrixFramework.git#latest`
 
 > ⚠️ Git 方式无法自动解析依赖，需要先手动安装：
 > - [UniTask](https://github.com/Cysharp/UniTask)
@@ -334,11 +334,11 @@ public class LoadSceneHook : IAfterPhaseHook<IStartPhase>
 
 | 菜单路径 | 说明 |
 |----------|------|
-| `Azathrix > Settings` | 框架设置面板 |
-| `Azathrix > System Registry` | 系统注册表管理 |
-| `Azathrix > Phase Registry` | 阶段注册表管理 |
-| `Azathrix > Hook Registry` | 钩子注册表管理 |
-| `Azathrix > System Monitor` | 运行时系统监控 |
+| `Azathrix > 设置` | 框架设置面板 |
+| `Azathrix > 注册表 > 系统注册表` | 系统注册表管理 |
+| `Azathrix > 注册表 > 启动阶段注册表` | 阶段注册表管理 |
+| `Azathrix > 注册表 > 启动钩子注册表` | 钩子注册表管理 |
+| `Azathrix > 调试分析 > 系统监视器` | 运行时系统监控 |
 
 ### 系统注册表功能
 
