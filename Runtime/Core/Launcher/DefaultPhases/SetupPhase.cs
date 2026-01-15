@@ -7,6 +7,7 @@ namespace Azathrix.Framework.Core.Launcher.DefaultPhases
     /// <summary>
     /// Setup阶段 - 初始化基础设施
     /// </summary>
+    [Register]
     [PhaseId("Setup")]
     public class SetupPhase : ISetupPhase
     {

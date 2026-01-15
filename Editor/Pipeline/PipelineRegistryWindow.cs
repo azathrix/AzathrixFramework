@@ -21,6 +21,7 @@ namespace Azathrix.Framework.Editor.Pipeline
 
         // 分组折叠状态
         private Dictionary<string, bool> _foldouts = new();
+        private readonly Dictionary<string, bool> _hookFoldouts = new();
 
         // 排序
         private string _sortColumn;
@@ -37,7 +38,7 @@ namespace Azathrix.Framework.Editor.Pipeline
         }
 
         // 列定义
-        private readonly float[] _colWidths = { 40f, 60f, 180f, 80f, 120f };
+        private readonly float[] _colWidths = { 40f, 60f, 180f, 80f, 220f };
         private readonly string[] _colNames = { "启用", "Order", "名称", "类型", "接口" };
 
         [MenuItem("Azathrix/注册表/管线注册表")]
@@ -105,11 +106,6 @@ namespace Azathrix.Framework.Editor.Pipeline
                 Repaint();
             }
 
-            if (GUILayout.Button("清理", EditorStyles.toolbarButton, GUILayout.Width(40)))
-            {
-                CleanupMissingEntries();
-            }
-
             EditorGUILayout.EndHorizontal();
         }
 
@@ -165,13 +161,13 @@ namespace Azathrix.Framework.Editor.Pipeline
             var totalCount = validPhases.Count + validHooks.Count;
             var enabledCount = validPhases.Count(p => p.enabled) + validHooks.Count(h => h.enabled);
 
-            // 如果没有有效条目，不显示这个管线
-            if (totalCount == 0) return;
-
             // 管线组头
             var rect = EditorGUILayout.BeginHorizontal(EditorStyles.toolbar);
             var bgColor = rect.Contains(Event.current.mousePosition) ? new Color(0.28f, 0.28f, 0.28f) : new Color(0.15f, 0.15f, 0.15f);
             EditorGUI.DrawRect(rect, bgColor);
+
+            GUI.color = Color.white;
+            GUI.contentColor = Color.white;
 
             if (Event.current.type == EventType.MouseDown && rect.Contains(Event.current.mousePosition))
             {
@@ -182,7 +178,30 @@ namespace Azathrix.Framework.Editor.Pipeline
                 }
             }
 
-            _foldouts[key] = EditorGUILayout.Foldout(_foldouts[key], $"{pipeline.displayName} ({enabledCount}/{totalCount})", true);
+            var headerLabel = $"{pipeline.displayName} ({enabledCount}/{totalCount})";
+            var showWarning = validPhases.Count == 0;
+            if (showWarning)
+                headerLabel += "  ⚠ 没有阶段";
+
+            var headerStyle = new GUIStyle(EditorStyles.foldout);
+            if (showWarning)
+            {
+                var warnColor = new Color(1f, 0.85f, 0.35f);
+                headerStyle.normal.textColor = warnColor;
+                headerStyle.hover.textColor = warnColor;
+                headerStyle.active.textColor = warnColor;
+                headerStyle.focused.textColor = warnColor;
+                headerStyle.onNormal.textColor = warnColor;
+                headerStyle.onHover.textColor = warnColor;
+                headerStyle.onActive.textColor = warnColor;
+                headerStyle.onFocused.textColor = warnColor;
+                GUI.contentColor = warnColor;
+            }
+
+            _foldouts[key] = EditorGUILayout.Foldout(_foldouts[key], headerLabel, true, headerStyle);
+
+            GUI.color = Color.white;
+            GUI.contentColor = Color.white;
 
             GUILayout.FlexibleSpace();
 
@@ -214,7 +233,6 @@ namespace Azathrix.Framework.Editor.Pipeline
             {
                 var phase = sortedPhases[i];
 
-                // 绘制该阶段的钩子（前置在前，后置在后）
                 var phaseHooks = hookViews
                     .Where(h => MatchesPhaseTarget(phase, h.Target))
                     .ToList();
@@ -229,27 +247,22 @@ namespace Azathrix.Framework.Editor.Pipeline
                     .OrderBy(h => h.Hook.order)
                     .ToList();
 
-                foreach (var hook in beforeHooks)
-                    DrawHookRow(pipeline, hook.Hook, hook.Target, rowIndex++);
+                var hookKey = GetHookFoldoutKey(pipeline, phase);
 
-                DrawPhaseRow(pipeline, phase, rowIndex++);
+                DrawPhaseRow(pipeline, phase, rowIndex++, beforeHooks.Count, afterHooks.Count, hookKey);
 
-                foreach (var hook in afterHooks)
-                    DrawHookRow(pipeline, hook.Hook, hook.Target, rowIndex++);
+                if (GetHookFoldout(hookKey))
+                {
+                    foreach (var hook in beforeHooks)
+                        DrawHookRow(pipeline, hook.Hook, hook.Target, rowIndex++);
+                    foreach (var hook in afterHooks)
+                        DrawHookRow(pipeline, hook.Hook, hook.Target, rowIndex++);
+                }
             }
 
-            // 绘制没有匹配阶段的钩子
-            var orphanHooks = hookViews
-                .Where(h => !sortedPhases.Any(p => MatchesPhaseTarget(p, h.Target)))
-                .OrderBy(h => h.Hook.isBefore ? 0 : 1)
-                .ThenBy(h => h.Hook.order)
-                .ToList();
-
-            foreach (var hook in orphanHooks)
-                DrawHookRow(pipeline, hook.Hook, hook.Target, rowIndex++);
         }
 
-        private void DrawPhaseRow(PipelineEntry pipeline, PhaseEntry phase, int index)
+        private void DrawPhaseRow(PipelineEntry pipeline, PhaseEntry phase, int index, int beforeCount, int afterCount, string hookKey)
         {
             var bgColor = index % 2 == 0 ? new Color(0.18f, 0.18f, 0.18f) : new Color(0.22f, 0.22f, 0.22f);
 
@@ -260,6 +273,19 @@ namespace Azathrix.Framework.Editor.Pipeline
             EditorGUI.DrawRect(rect, bgColor);
 
             if (!phase.enabled) GUI.color = Color.gray;
+
+            var totalHooks = beforeCount + afterCount;
+            if (totalHooks > 0)
+            {
+                var hookOpen = GetHookFoldout(hookKey);
+                var foldoutRect = GUILayoutUtility.GetRect(14f, 18f, GUILayout.Width(14));
+                hookOpen = EditorGUI.Foldout(foldoutRect, hookOpen, GUIContent.none, true);
+                _hookFoldouts[hookKey] = hookOpen;
+            }
+            else
+            {
+                GUILayout.Space(14);
+            }
 
             // 启用
             EditorGUI.BeginChangeCheck();
@@ -276,15 +302,19 @@ namespace Azathrix.Framework.Editor.Pipeline
             GUI.color = phase.enabled ? Color.white : Color.gray;
 
             // 类型
-            EditorGUILayout.LabelField("阶段", GUILayout.Width(_colWidths[3]));
+            var phaseTypeLabel = phase.isAuto ? "阶段/注册" : "阶段/手动";
+            EditorGUILayout.LabelField(phaseTypeLabel, GUILayout.Width(_colWidths[3]));
 
             // 接口
-            var interfaceName = phase.interfaceTypeName?.Split('.').Last() ?? "-";
-            EditorGUILayout.LabelField(interfaceName, GUILayout.Width(_colWidths[4]));
+            var interfaceName = phase.interfaceTypeName ?? "-";
+            var interfaceContent = new GUIContent(interfaceName, interfaceName);
+            EditorGUILayout.LabelField(interfaceContent, GUILayout.ExpandWidth(true));
 
             GUI.color = Color.white;
 
             GUILayout.FlexibleSpace();
+            if (totalHooks > 0)
+                EditorGUILayout.LabelField($"钩子 {beforeCount}/{afterCount}", GUILayout.Width(80));
             EditorGUILayout.EndHorizontal();
             EditorGUILayout.EndHorizontal();
         }
@@ -295,7 +325,7 @@ namespace Azathrix.Framework.Editor.Pipeline
             var bgColor = index % 2 == 0 ? new Color(0.15f, 0.17f, 0.22f) : new Color(0.18f, 0.20f, 0.25f);
 
             EditorGUILayout.BeginHorizontal();
-            GUILayout.Space(16);
+            GUILayout.Space(56);
 
             var rect = EditorGUILayout.BeginHorizontal();
             EditorGUI.DrawRect(rect, bgColor);
@@ -309,14 +339,15 @@ namespace Azathrix.Framework.Editor.Pipeline
                 EditorUtility.SetDirty(_registry);
 
             // Order
-            DrawHookOrderCell(hook, _colWidths[1]);
+            DrawHookOrderCell(hook, target, _colWidths[1]);
 
             // 名称
             EditorGUILayout.LabelField(hook.displayName, GUILayout.Width(_colWidths[2]));
 
             // 类型
             var timing = hook.isBefore ? "前置钩子" : "后置钩子";
-            EditorGUILayout.LabelField(timing, GUILayout.Width(_colWidths[3]));
+            var hookTypeLabel = hook.isAuto ? $"{timing}/注册" : $"{timing}/手动";
+            EditorGUILayout.LabelField(hookTypeLabel, GUILayout.Width(_colWidths[3]));
 
             // 目标
             var targetName = string.IsNullOrEmpty(target) ? "-" : target.Split('.').Last();
@@ -397,9 +428,9 @@ namespace Azathrix.Framework.Editor.Pipeline
                 Repaint();
         }
 
-        private void DrawHookOrderCell(HookEntry hook, float width)
+        private void DrawHookOrderCell(HookEntry hook, string target, float width)
         {
-            var key = $"hook_{hook.typeName}";
+            var key = $"hook_{hook.typeName}_{hook.isBefore}_{target}";
             var isEditing = _editingOrderKey == key;
             var rect = GUILayoutUtility.GetRect(width, 18f, GUILayout.Width(width));
             var isHover = rect.Contains(Event.current.mousePosition);
@@ -522,6 +553,21 @@ namespace Azathrix.Framework.Editor.Pipeline
             return views;
         }
 
+        private static string GetHookFoldoutKey(PipelineEntry pipeline, PhaseEntry phase)
+        {
+            return $"{pipeline.pipelineId}:{phase.phaseId}";
+        }
+
+        private bool GetHookFoldout(string key)
+        {
+            if (!_hookFoldouts.TryGetValue(key, out var value))
+            {
+                _hookFoldouts[key] = false;
+                return false;
+            }
+            return value;
+        }
+
         private static bool MatchesPhaseTarget(PhaseEntry phase, string target)
         {
             if (string.IsNullOrEmpty(target))
@@ -546,36 +592,5 @@ namespace Azathrix.Framework.Editor.Pipeline
             return sorted.ToList();
         }
 
-        private void CleanupMissingEntries()
-        {
-            var removedPhases = 0;
-            var removedHooks = 0;
-            var removedPipelines = 0;
-
-            foreach (var pipeline in _registry.pipelines.ToList())
-            {
-                removedPhases += pipeline.phases.RemoveAll(p => p.IsMissing);
-                removedHooks += pipeline.hooks.RemoveAll(h => h.IsMissing);
-
-                // 如果管线类型也丢失且没有任何阶段和钩子，移除整个管线
-                if (pipeline.GetPipelineType() == null && pipeline.phases.Count == 0 && pipeline.hooks.Count == 0)
-                {
-                    _registry.pipelines.Remove(pipeline);
-                    removedPipelines++;
-                }
-            }
-
-            if (removedPhases > 0 || removedHooks > 0 || removedPipelines > 0)
-            {
-                _registry.ClearCache();
-                EditorUtility.SetDirty(_registry);
-                AssetDatabase.SaveAssets();
-                Debug.Log($"[PipelineRegistry] 清理完成: 移除 {removedPipelines} 个管线, {removedPhases} 个阶段, {removedHooks} 个钩子");
-            }
-            else
-            {
-                Debug.Log("[PipelineRegistry] 没有需要清理的数据");
-            }
-        }
     }
 }

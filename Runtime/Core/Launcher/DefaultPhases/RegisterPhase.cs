@@ -8,6 +8,7 @@ namespace Azathrix.Framework.Core.Launcher.DefaultPhases
     /// <summary>
     /// Register阶段 - 注册系统
     /// </summary>
+    [Register]
     [PhaseId("Register")]
     public class RegisterPhase : IRegisterPhase
     {

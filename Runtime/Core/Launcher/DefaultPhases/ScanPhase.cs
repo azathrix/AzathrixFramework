@@ -8,6 +8,7 @@ namespace Azathrix.Framework.Core.Launcher.DefaultPhases
     /// <summary>
     /// Scan阶段 - 扫描系统类型
     /// </summary>
+    [Register]
     [PhaseId("Scan")]
     public class ScanPhase : IScanPhase
     {

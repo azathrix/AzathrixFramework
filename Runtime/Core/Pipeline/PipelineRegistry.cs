@@ -168,6 +168,7 @@ namespace Azathrix.Framework.Core.Pipeline
         public int defaultOrder;
         public bool hasCustomOrder;
         public bool enabled = true;
+        public bool isAuto;
 
         public Type GetRuntimeType()
         {
@@ -191,6 +192,7 @@ namespace Azathrix.Framework.Core.Pipeline
         public bool hasCustomOrder;
         public bool enabled = true;
         public bool isBefore;
+        public bool isAuto;
 
         [FormerlySerializedAs("targetPhase")]
         [SerializeField]
@@ -234,34 +236,47 @@ namespace Azathrix.Framework.Core.Pipeline
             var implementsAfter = hook is IAfterPhaseHook ||
                 hookType.GetInterfaces().Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IAfterPhaseHook<>));
 
+            var normalizedTargets = targets?
+                .Where(t => t != null && !string.IsNullOrEmpty(t.phaseId))
+                .ToList();
+
+            if (normalizedTargets == null || normalizedTargets.Count == 0)
+                return entries;
+
             if (implementsBefore)
             {
-                entries.Add(new HookEntry
+                foreach (var target in normalizedTargets)
                 {
-                    typeName = hookType.FullName,
-                    assemblyName = hookType.Assembly.GetName().Name,
-                    displayName = hookType.Name,
-                    order = order,
-                    defaultOrder = order,
-                    enabled = true,
-                    isBefore = true,
-                    targets = targets
-                });
+                    entries.Add(new HookEntry
+                    {
+                        typeName = hookType.FullName,
+                        assemblyName = hookType.Assembly.GetName().Name,
+                        displayName = hookType.Name,
+                        order = order,
+                        defaultOrder = order,
+                        enabled = true,
+                        isBefore = true,
+                        targets = new List<HookTargetEntry> { new HookTargetEntry { phaseId = target.phaseId } }
+                    });
+                }
             }
 
             if (implementsAfter)
             {
-                entries.Add(new HookEntry
+                foreach (var target in normalizedTargets)
                 {
-                    typeName = hookType.FullName,
-                    assemblyName = hookType.Assembly.GetName().Name,
-                    displayName = hookType.Name,
-                    order = order,
-                    defaultOrder = order,
-                    enabled = true,
-                    isBefore = false,
-                    targets = targets
-                });
+                    entries.Add(new HookEntry
+                    {
+                        typeName = hookType.FullName,
+                        assemblyName = hookType.Assembly.GetName().Name,
+                        displayName = hookType.Name,
+                        order = order,
+                        defaultOrder = order,
+                        enabled = true,
+                        isBefore = false,
+                        targets = new List<HookTargetEntry> { new HookTargetEntry { phaseId = target.phaseId } }
+                    });
+                }
             }
 
             return entries;

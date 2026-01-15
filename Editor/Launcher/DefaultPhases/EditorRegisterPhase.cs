@@ -8,6 +8,7 @@ namespace Azathrix.Framework.Editor.Launcher.DefaultPhases
     /// <summary>
     /// 编辑器Register阶段
     /// </summary>
+    [Register]
     [PhaseId("EditorRegister")]
     public class EditorRegisterPhase : IEditorRegisterPhase
     {

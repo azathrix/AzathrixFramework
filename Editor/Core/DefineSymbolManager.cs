@@ -17,11 +17,11 @@ namespace Azathrix.Framework.Editor
             DefineSymbolSettings.OnSettingsChanged += SyncToPlayerSettings;
         }
 
-        /// <summary>
+        /// <summary> 
         /// 添加宏定义
-        /// </summary>
+        /// </summary> 
         public static void Add(string symbol, string source = null)
-        {
+        { 
             var settings = DefineSymbolSettings.Instance;
             if (settings == null) return;
 

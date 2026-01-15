@@ -19,7 +19,7 @@ namespace Azathrix.Framework.Editor.Registry
             };
         }
 
-        [MenuItem("Azathrix/注册表/刷新注册表")]
+       // [MenuItem("Azathrix/注册表/刷新注册表")]
         public static void UpdateAllRegistries()
         {
             // 如果正在编译，不执行扫描
@@ -34,5 +34,5 @@ namespace Azathrix.Framework.Editor.Registry
 
             AssetDatabase.SaveAssets();
         }
-    }
+    } 
 }

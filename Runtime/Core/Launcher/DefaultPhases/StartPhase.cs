@@ -7,6 +7,7 @@ namespace Azathrix.Framework.Core.Launcher.DefaultPhases
     /// <summary>
     /// Start阶段 - 启动完成
     /// </summary>
+    [Register]
     [PhaseId("Start")]
     public class StartPhase : IStartPhase
     {

@@ -8,6 +8,7 @@ namespace Azathrix.Framework.Editor.Launcher.DefaultPhases
     /// <summary>
     /// 编辑器Setup阶段
     /// </summary>
+    [Register]
     [PhaseId("EditorSetup")]
     public class EditorSetupPhase : IEditorSetupPhase
     {

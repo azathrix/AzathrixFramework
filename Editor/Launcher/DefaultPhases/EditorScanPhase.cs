@@ -8,6 +8,7 @@ namespace Azathrix.Framework.Editor.Launcher.DefaultPhases
     /// <summary>
     /// 编辑器Scan阶段
     /// </summary>
+    [Register]
     [PhaseId("EditorScan")]
     public class EditorScanPhase : IEditorScanPhase
     {

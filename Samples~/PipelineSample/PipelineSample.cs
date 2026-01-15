@@ -58,6 +58,7 @@ namespace Azathrix.Framework.Samples.Pipeline
 
     [PipelineId("SamplePipeline")]
     [PhaseId("Base")]
+    [Register]
     internal abstract class SampleBasePhase : ISamplePhase
     {
         public int Order => 100;
@@ -71,6 +72,7 @@ namespace Azathrix.Framework.Samples.Pipeline
 
     [PipelineId("SamplePipeline")]
     [PhaseId("Derived")]
+    [Register]
     internal class SampleDerivedPhase : SampleBasePhase, ISampleTaggedPhase
     {
         public override UniTask ExecuteAsync(SampleContext context)
@@ -80,6 +82,7 @@ namespace Azathrix.Framework.Samples.Pipeline
         }
     }
 
+    [Register]
     [HookTarget("SamplePipeline", "Base")]
     [HookTarget("SamplePipeline", "Derived")]
     internal class SampleGlobalHook : IHook<SampleContext>
@@ -99,7 +102,8 @@ namespace Azathrix.Framework.Samples.Pipeline
         }
     }
 
-    [HookTarget("SamplePipeline", nameof(SampleBasePhase))]
+    [Register]
+    [HookTarget("SamplePipeline", "Base")]
     internal class SampleBaseBeforeHook : IBeforePhaseHook<SampleContext>
     {
         public int Order => 10;
@@ -111,6 +115,7 @@ namespace Azathrix.Framework.Samples.Pipeline
         }
     }
 
+    [Register]
     [HookTarget("SamplePipeline", "Derived")]
     internal class SampleInterfaceBeforeHook : IBeforePhaseHook<SampleContext>
     {
@@ -123,6 +128,7 @@ namespace Azathrix.Framework.Samples.Pipeline
         }
     }
 
+    [Register]
     [HookTarget("SamplePipeline", "Derived")]
     internal class SampleConcreteBeforeHook : IBeforePhaseHook<SampleContext>
     {
@@ -135,6 +141,7 @@ namespace Azathrix.Framework.Samples.Pipeline
         }
     }
 
+    [Register]
     [HookTarget("Launcher", "Start")]
     internal class SamplePipelineTriggerHook : IAfterPhaseHook<LauncherContext>
     {
