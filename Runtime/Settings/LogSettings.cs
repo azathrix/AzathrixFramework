@@ -82,7 +82,7 @@ namespace Azathrix.Framework.Settings
         };
 
         public Color warningColor = new(1f, 1f, 0.51f);
-        public Color errorColor = new(1f, 0.18f, 0.11f);
+        public Color errorColor = new(1f, 1, 1);
         public Color tagColor = new(0.42f, 1f, 0.5f);
 
         [Header("自定义标签")]

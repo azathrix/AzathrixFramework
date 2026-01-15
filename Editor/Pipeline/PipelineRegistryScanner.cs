@@ -2,10 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using System.IO;
 using Azathrix.Framework.Core.Launcher;
 using Azathrix.Framework.Core.Pipeline;
 using Azathrix.Framework.Editor.Launcher;
 using UnityEditor;
+using UnityEditor.Compilation;
 using UnityEngine;
 
 namespace Azathrix.Framework.Editor.Pipeline
@@ -24,12 +26,14 @@ namespace Azathrix.Framework.Editor.Pipeline
         [MenuItem("Azathrix/注册表/扫描管线")]
         public static void ScanAll()
         {
+#if UNITY_EDITOR
+            if (EditorApplication.isCompiling || EditorApplication.isUpdating || EditorApplication.isPlayingOrWillChangePlaymode)
+                return;
+#endif
             var registry = PipelineRegistry.Instance;
             if (registry == null) return;
 
-            var assemblies = AppDomain.CurrentDomain.GetAssemblies()
-                .Where(a => !a.IsDynamic && !a.FullName.StartsWith("Unity") && !a.FullName.StartsWith("System"))
-                .ToArray();
+            var assemblies = CollectTargetAssemblies();
 
             // 扫描所有管线
             ScanPipelines(registry, assemblies);
@@ -41,7 +45,70 @@ namespace Azathrix.Framework.Editor.Pipeline
             AssetDatabase.SaveAssets();
         }
 
-        private static void ScanPipelines(PipelineRegistry registry, Assembly[] assemblies)
+        private static System.Reflection.Assembly[] CollectTargetAssemblies()
+        {
+            var assemblies = AppDomain.CurrentDomain.GetAssemblies()
+                .Where(a => !a.IsDynamic)
+                .ToArray();
+
+            try
+            {
+                var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var projectRoot = Directory.GetParent(Application.dataPath)?.FullName?.Replace('\\', '/');
+                if (!string.IsNullOrEmpty(projectRoot))
+                {
+                    var assetsRoot = $"{projectRoot}/Assets";
+                    var packagesRoot = $"{projectRoot}/Packages";
+                    var packageCacheRoot = $"{projectRoot}/Library/PackageCache";
+
+                    foreach (var asm in CompilationPipeline.GetAssemblies())
+                    {
+                        if (asm.sourceFiles == null || asm.sourceFiles.Length == 0)
+                            continue;
+
+                        var include = asm.sourceFiles.Any(path =>
+                        {
+                            var normalized = path.Replace('\\', '/');
+                            if (normalized.StartsWith(assetsRoot, StringComparison.OrdinalIgnoreCase))
+                                return true;
+                            if (normalized.StartsWith(packagesRoot, StringComparison.OrdinalIgnoreCase) &&
+                                !normalized.StartsWith($"{packagesRoot}/com.unity.", StringComparison.OrdinalIgnoreCase))
+                                return true;
+                            if (normalized.StartsWith(packageCacheRoot, StringComparison.OrdinalIgnoreCase) &&
+                                !normalized.StartsWith($"{packageCacheRoot}/com.unity.", StringComparison.OrdinalIgnoreCase))
+                                return true;
+                            return false;
+                        });
+
+                        if (include)
+                            allowed.Add(asm.name);
+                    }
+                }
+
+                if (allowed.Count > 0)
+                {
+                    assemblies = assemblies
+                        .Where(a => allowed.Contains(a.GetName().Name))
+                        .ToArray();
+                }
+                else
+                {
+                    assemblies = assemblies
+                        .Where(a => !a.FullName.StartsWith("Unity") && !a.FullName.StartsWith("System"))
+                        .ToArray();
+                }
+            }
+            catch
+            {
+                assemblies = assemblies
+                    .Where(a => !a.FullName.StartsWith("Unity") && !a.FullName.StartsWith("System"))
+                    .ToArray();
+            }
+
+            return assemblies;
+        }
+
+        private static void ScanPipelines(PipelineRegistry registry, System.Reflection.Assembly[] assemblies)
         {
             var pipelineTypes = new List<Type>();
 
@@ -61,19 +128,17 @@ namespace Azathrix.Framework.Editor.Pipeline
 
             foreach (var type in pipelineTypes)
             {
-                var idAttr = type.GetCustomAttribute<PipelineIdAttribute>();
-                var nameAttr = type.GetCustomAttribute<PipelineDisplayNameAttribute>();
-
-                var pipelineId = idAttr?.Id ?? type.Name;
-                var displayName = nameAttr?.DisplayName ?? pipelineId;
+                var pipelineId = PipelineReflection.GetPipelineId(type);
+                var displayName = PipelineReflection.GetPipelineDisplayName(type, pipelineId);
 
                 var entry = registry.GetOrCreatePipeline(pipelineId, displayName);
+                entry.displayName = displayName;
                 entry.pipelineTypeName = type.FullName;
                 entry.pipelineAssembly = type.Assembly.GetName().Name;
             }
         }
 
-        private static void ScanPhasesAndHooks(PipelineRegistry registry, Assembly[] assemblies)
+        private static void ScanPhasesAndHooks(PipelineRegistry registry, System.Reflection.Assembly[] assemblies)
         {
             foreach (var assembly in assemblies)
             {
@@ -94,7 +159,7 @@ namespace Azathrix.Framework.Editor.Pipeline
             }
         }
 
-        private static void ScanPhase(PipelineRegistry registry, Type type, Assembly assembly)
+        private static void ScanPhase(PipelineRegistry registry, Type type, System.Reflection.Assembly assembly)
         {
             // 检查是否实现了 IPhase 接口
             var phaseInterface = type.GetInterfaces()
@@ -108,15 +173,16 @@ namespace Azathrix.Framework.Editor.Pipeline
 
             var pipeline = registry.GetOrCreatePipeline(pipelineId);
 
+            // 获取特定的阶段接口（如 IStartPhase, ISetupPhase 等）
+            var specificInterface = GetSpecificPhaseInterface(type);
+
             // 创建实例获取属性
             try
             {
                 var instance = Activator.CreateInstance(type);
-                var idProp = type.GetProperty("Id");
-                var orderProp = type.GetProperty("Order");
-
-                var phaseId = idProp?.GetValue(instance)?.ToString() ?? type.Name;
-                var defaultOrder = (int)(orderProp?.GetValue(instance) ?? 0);
+                var phaseId = PipelineReflection.GetPhaseId(type);
+                var displayName = PipelineReflection.GetPhaseDisplayName(type, phaseId);
+                var defaultOrder = PipelineReflection.GetOrder(instance);
 
                 // 检查是否已存在
                 var existing = pipeline.phases.FirstOrDefault(p => p.typeName == type.FullName);
@@ -124,6 +190,11 @@ namespace Azathrix.Framework.Editor.Pipeline
                 {
                     // 更新默认值
                     existing.defaultOrder = defaultOrder;
+                    if (!existing.hasCustomOrder)
+                        existing.order = defaultOrder;
+                    existing.interfaceTypeName = specificInterface?.FullName;
+                    existing.phaseId = phaseId;
+                    existing.displayName = displayName;
                     return;
                 }
 
@@ -131,8 +202,9 @@ namespace Azathrix.Framework.Editor.Pipeline
                 {
                     typeName = type.FullName,
                     assemblyName = assembly.GetName().Name,
-                    displayName = type.Name,
+                    displayName = displayName,
                     phaseId = phaseId,
+                    interfaceTypeName = specificInterface?.FullName,
                     order = defaultOrder,
                     defaultOrder = defaultOrder,
                     enabled = true
@@ -141,55 +213,65 @@ namespace Azathrix.Framework.Editor.Pipeline
             catch { }
         }
 
-        private static void ScanHook(PipelineRegistry registry, Type type, Assembly assembly)
+        private static void ScanHook(PipelineRegistry registry, Type type, System.Reflection.Assembly assembly)
         {
-            // 检查是否实现了 IHook 接口
-            var hookInterface = type.GetInterfaces()
-                .FirstOrDefault(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IHook<>));
+            var isBefore = ImplementsBeforeHook(type);
+            var isAfter = ImplementsAfterHook(type);
 
-            if (hookInterface == null) return;
+            if (!isBefore && !isAfter)
+                return;
 
-            // 获取管线ID
-            var pipelineId = GetPipelineIdForHook(type);
-            if (string.IsNullOrEmpty(pipelineId)) return;
+            var hookTargets = type.GetCustomAttributes<HookTargetAttribute>(true).ToList();
+            var pipelineTargets = new Dictionary<string, List<HookTargetEntry>>();
 
-            var pipeline = registry.GetOrCreatePipeline(pipelineId);
+            if (hookTargets.Count > 0)
+            {
+                foreach (var group in hookTargets.GroupBy(t => t.PipelineId))
+                {
+                    if (string.IsNullOrEmpty(group.Key)) continue;
+                    var targets = group
+                        .Where(t => !string.IsNullOrEmpty(t.PhaseId))
+                        .Select(t => new HookTargetEntry { phaseId = t.PhaseId })
+                        .ToList();
+                    if (targets.Count > 0)
+                        pipelineTargets[group.Key] = targets;
+                }
+            }
 
+            if (pipelineTargets.Count == 0)
+                return;
+
+            int defaultOrder;
             try
             {
                 var instance = Activator.CreateInstance(type);
-                var orderProp = type.GetProperty("Order");
-                var defaultOrder = (int)(orderProp?.GetValue(instance) ?? 0);
-
-                // 获取目标阶段
-                var targetPhase = GetTargetPhaseForHook(type);
-
-                // 检查是否已存在
-                var existing = pipeline.hooks.FirstOrDefault(h => h.typeName == type.FullName);
-                if (existing != null)
-                {
-                    existing.defaultOrder = defaultOrder;
-                    return;
-                }
-
-                pipeline.hooks.Add(new HookEntry
-                {
-                    typeName = type.FullName,
-                    assemblyName = assembly.GetName().Name,
-                    displayName = type.Name,
-                    targetPhase = targetPhase?.FullName ?? "",
-                    targetPhaseAssembly = targetPhase?.Assembly.GetName().Name ?? "",
-                    order = defaultOrder,
-                    defaultOrder = defaultOrder,
-                    enabled = true,
-                    isBefore = true
-                });
+                defaultOrder = PipelineReflection.GetOrder(instance);
             }
-            catch { }
+            catch
+            {
+                defaultOrder = 0;
+            }
+
+            foreach (var kvp in pipelineTargets)
+            {
+                var pipelineId = kvp.Key;
+                var targets = kvp.Value;
+                var pipeline = registry.GetOrCreatePipeline(pipelineId);
+
+                if (isBefore)
+                    UpsertHookEntry(pipeline, type, assembly, defaultOrder, targets, true);
+                if (isAfter)
+                    UpsertHookEntry(pipeline, type, assembly, defaultOrder, targets, false);
+            }
         }
 
         private static string GetPipelineIdForPhase(Type phaseType)
         {
+            // 如果类型上有 PipelineId 特性，优先使用
+            var idAttr = phaseType.GetCustomAttribute<PipelineIdAttribute>();
+            if (idAttr != null)
+                return idAttr.Id;
+
             // 检查 ILauncherPhase -> Launcher
             if (typeof(ILauncherPhase).IsAssignableFrom(phaseType))
                 return "Launcher";
@@ -205,38 +287,61 @@ namespace Azathrix.Framework.Editor.Pipeline
             return null;
         }
 
-        private static string GetPipelineIdForHook(Type hookType)
+        private static Type GetSpecificPhaseInterface(Type phaseType)
         {
-            // 检查 ILauncherHook -> Launcher
-            if (typeof(ILauncherHook).IsAssignableFrom(hookType))
-                return "Launcher";
+            // 查找特定的阶段接口（如 IStartPhase, ISetupPhase）
+            // 排除通用的 IPhase 和 IPhase<>
+            foreach (var iface in phaseType.GetInterfaces())
+            {
+                if (iface == typeof(IPhase)) continue;
+                if (iface.IsGenericType && iface.GetGenericTypeDefinition() == typeof(IPhase<>)) continue;
 
-            // 检查 IEditorLauncherHook -> EditorLauncher
-            if (typeof(IEditorLauncherHook).IsAssignableFrom(hookType))
-                return "EditorLauncher";
-
-            if (hookType.Namespace?.Contains("Azcel") == true)
-                return "Azcel.Converter";
-
+                if (typeof(IPhase).IsAssignableFrom(iface))
+                    return iface;
+            }
             return null;
         }
 
-        private static Type GetTargetPhaseForHook(Type hookType)
+        private static bool ImplementsBeforeHook(Type hookType)
         {
-            // 从泛型参数获取目标阶段类型
-            var interfaces = hookType.GetInterfaces();
-            foreach (var iface in interfaces)
-            {
-                if (!iface.IsGenericType) continue;
+            if (typeof(IBeforePhaseHook).IsAssignableFrom(hookType))
+                return true;
+            return hookType.GetInterfaces()
+                .Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IBeforePhaseHook<>));
+        }
 
-                var genericArgs = iface.GetGenericArguments();
-                foreach (var arg in genericArgs)
-                {
-                    if (typeof(IPhase).IsAssignableFrom(arg))
-                        return arg;
-                }
+        private static bool ImplementsAfterHook(Type hookType)
+        {
+            if (typeof(IAfterPhaseHook).IsAssignableFrom(hookType))
+                return true;
+            return hookType.GetInterfaces()
+                .Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IAfterPhaseHook<>));
+        }
+
+        private static void UpsertHookEntry(PipelineEntry pipeline, Type type, System.Reflection.Assembly assembly, int defaultOrder, List<HookTargetEntry> targets, bool isBefore)
+        {
+            var existing = pipeline.hooks.FirstOrDefault(h => h.typeName == type.FullName && h.isBefore == isBefore);
+            if (existing != null)
+            {
+                existing.defaultOrder = defaultOrder;
+                if (!existing.hasCustomOrder)
+                    existing.order = defaultOrder;
+                existing.targets = targets;
+                existing.displayName = type.Name;
+                return;
             }
-            return null;
+
+            pipeline.hooks.Add(new HookEntry
+            {
+                typeName = type.FullName,
+                assemblyName = assembly.GetName().Name,
+                displayName = type.Name,
+                targets = targets,
+                order = defaultOrder,
+                defaultOrder = defaultOrder,
+                enabled = true,
+                isBefore = isBefore
+            });
         }
     }
 }

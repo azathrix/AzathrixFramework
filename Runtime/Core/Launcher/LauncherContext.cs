@@ -1,6 +1,5 @@
 using System;
 using Azathrix.Framework.Core.Pipeline;
-using Azathrix.Framework.Interfaces;
 
 namespace Azathrix.Framework.Core.Launcher
 {
@@ -9,9 +8,6 @@ namespace Azathrix.Framework.Core.Launcher
     /// </summary>
     public class LauncherContext : PipelineContext
     {
-        public ILogger Logger { get; set; }
-        public IResourcesLoader ResourcesLoader { get; set; }
-
         /// <summary>
         /// 静默模式（不输出日志）
         /// </summary>

@@ -30,9 +30,15 @@ namespace Azathrix.Framework.Editor.Pipeline
         private string _editingOrderKey;
         private int _editingOrderValue;
 
+        private sealed class HookView
+        {
+            public HookEntry Hook;
+            public string Target;
+        }
+
         // 列定义
-        private readonly float[] _colWidths = { 40f, 60f, 200f, 80f, 150f };
-        private readonly string[] _colNames = { "启用", "Order", "名称", "类型", "目标" };
+        private readonly float[] _colWidths = { 40f, 60f, 180f, 80f, 120f };
+        private readonly string[] _colNames = { "启用", "Order", "名称", "类型", "接口" };
 
         [MenuItem("Azathrix/注册表/管线注册表")]
         public static void ShowWindow()
@@ -197,60 +203,50 @@ namespace Azathrix.Framework.Editor.Pipeline
 
             if (!_foldouts[key]) return;
 
-            // 直接绘制阶段
+            // 绘制阶段和对应的钩子
             var filteredPhases = FilterPhases(pipeline.phases);
             var sortedPhases = ApplySort(filteredPhases);
+            var filteredHooks = FilterHooks(pipeline.hooks);
+            var hookViews = ExpandHooks(filteredHooks);
+            var rowIndex = 0;
+
             for (int i = 0; i < sortedPhases.Count; i++)
-                DrawPhaseRow(pipeline, sortedPhases[i], i);
-
-            // 钩子组
-            if (pipeline.hooks.Count > 0)
-                DrawHookGroup(pipeline);
-        }
-
-        private void DrawHookGroup(PipelineEntry pipeline)
-        {
-            var key = $"{pipeline.pipelineId}_hooks";
-            if (!_foldouts.ContainsKey(key))
-                _foldouts[key] = true;
-
-            var filtered = FilterHooks(pipeline.hooks);
-            if (filtered.Count == 0) return;
-
-            var enabledCount = filtered.Count(h => h.enabled);
-
-            EditorGUILayout.BeginHorizontal();
-            GUILayout.Space(16);
-
-            var subRect = EditorGUILayout.BeginHorizontal(EditorStyles.toolbar);
-            EditorGUI.DrawRect(subRect, new Color(0.25f, 0.2f, 0.2f));
-
-            _foldouts[key] = EditorGUILayout.Foldout(_foldouts[key], $"钩子 ({enabledCount}/{filtered.Count})", true);
-
-            GUILayout.FlexibleSpace();
-
-            if (GUILayout.Button("All", EditorStyles.toolbarButton, GUILayout.Width(30)))
             {
-                foreach (var h in filtered) h.enabled = true;
-                EditorUtility.SetDirty(_registry);
-            }
-            if (GUILayout.Button("None", EditorStyles.toolbarButton, GUILayout.Width(40)))
-            {
-                foreach (var h in filtered) h.enabled = false;
-                EditorUtility.SetDirty(_registry);
+                var phase = sortedPhases[i];
+
+                // 绘制该阶段的钩子（前置在前，后置在后）
+                var phaseHooks = hookViews
+                    .Where(h => MatchesPhaseTarget(phase, h.Target))
+                    .ToList();
+
+                var beforeHooks = phaseHooks
+                    .Where(h => h.Hook.isBefore)
+                    .OrderBy(h => h.Hook.order)
+                    .ToList();
+
+                var afterHooks = phaseHooks
+                    .Where(h => !h.Hook.isBefore)
+                    .OrderBy(h => h.Hook.order)
+                    .ToList();
+
+                foreach (var hook in beforeHooks)
+                    DrawHookRow(pipeline, hook.Hook, hook.Target, rowIndex++);
+
+                DrawPhaseRow(pipeline, phase, rowIndex++);
+
+                foreach (var hook in afterHooks)
+                    DrawHookRow(pipeline, hook.Hook, hook.Target, rowIndex++);
             }
 
-            EditorGUILayout.EndHorizontal();
-            EditorGUILayout.EndHorizontal();
+            // 绘制没有匹配阶段的钩子
+            var orphanHooks = hookViews
+                .Where(h => !sortedPhases.Any(p => MatchesPhaseTarget(p, h.Target)))
+                .OrderBy(h => h.Hook.isBefore ? 0 : 1)
+                .ThenBy(h => h.Hook.order)
+                .ToList();
 
-            if (!_foldouts[key]) return;
-
-            var sorted = filtered.OrderBy(h => h.targetPhase).ThenBy(h => h.order).ToList();
-
-            for (int i = 0; i < sorted.Count; i++)
-            {
-                DrawHookRow(pipeline, sorted[i], i);
-            }
+            foreach (var hook in orphanHooks)
+                DrawHookRow(pipeline, hook.Hook, hook.Target, rowIndex++);
         }
 
         private void DrawPhaseRow(PipelineEntry pipeline, PhaseEntry phase, int index)
@@ -282,8 +278,9 @@ namespace Azathrix.Framework.Editor.Pipeline
             // 类型
             EditorGUILayout.LabelField("阶段", GUILayout.Width(_colWidths[3]));
 
-            // 目标（阶段没有目标）
-            EditorGUILayout.LabelField("-", GUILayout.Width(_colWidths[4]));
+            // 接口
+            var interfaceName = phase.interfaceTypeName?.Split('.').Last() ?? "-";
+            EditorGUILayout.LabelField(interfaceName, GUILayout.Width(_colWidths[4]));
 
             GUI.color = Color.white;
 
@@ -292,9 +289,10 @@ namespace Azathrix.Framework.Editor.Pipeline
             EditorGUILayout.EndHorizontal();
         }
 
-        private void DrawHookRow(PipelineEntry pipeline, HookEntry hook, int index)
+        private void DrawHookRow(PipelineEntry pipeline, HookEntry hook, string target, int index)
         {
-            var bgColor = index % 2 == 0 ? new Color(0.18f, 0.18f, 0.18f) : new Color(0.22f, 0.22f, 0.22f);
+            // 钩子使用偏蓝色调
+            var bgColor = index % 2 == 0 ? new Color(0.15f, 0.17f, 0.22f) : new Color(0.18f, 0.20f, 0.25f);
 
             EditorGUILayout.BeginHorizontal();
             GUILayout.Space(16);
@@ -321,7 +319,7 @@ namespace Azathrix.Framework.Editor.Pipeline
             EditorGUILayout.LabelField(timing, GUILayout.Width(_colWidths[3]));
 
             // 目标
-            var targetName = hook.targetPhase?.Split('.').Last() ?? "-";
+            var targetName = string.IsNullOrEmpty(target) ? "-" : target.Split('.').Last();
             EditorGUILayout.LabelField(targetName, GUILayout.Width(_colWidths[4]));
 
             GUI.color = Color.white;
@@ -503,6 +501,33 @@ namespace Azathrix.Framework.Editor.Pipeline
                 if (_showOnlyEnabled && !h.enabled) return false;
                 return true;
             }).ToList();
+        }
+
+        private static List<HookView> ExpandHooks(List<HookEntry> hooks)
+        {
+            var views = new List<HookView>();
+            foreach (var hook in hooks)
+            {
+                if (hook.targets == null || hook.targets.Count == 0)
+                    continue;
+
+                foreach (var target in hook.targets)
+                {
+                    if (string.IsNullOrEmpty(target.phaseId))
+                        continue;
+                    views.Add(new HookView { Hook = hook, Target = target.phaseId });
+                }
+            }
+
+            return views;
+        }
+
+        private static bool MatchesPhaseTarget(PhaseEntry phase, string target)
+        {
+            if (string.IsNullOrEmpty(target))
+                return false;
+
+            return string.Equals(target, phase.phaseId, StringComparison.OrdinalIgnoreCase);
         }
 
         private List<PhaseEntry> ApplySort(List<PhaseEntry> phases)

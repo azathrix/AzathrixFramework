@@ -1,5 +1,6 @@
 using Azathrix.Framework.Core;
 using Azathrix.Framework.Core.Launcher;
+using Azathrix.Framework.Core.Pipeline;
 using Azathrix.Framework.Settings;
 using Azathrix.Framework.Tools;
 using Cysharp.Threading.Tasks;
@@ -36,12 +37,16 @@ namespace Azathrix.Framework.Editor.Launcher
 
             var settings = AzathrixFrameworkSettings.Instance;
 
-            _editorPipeline = new EditorLauncherPipeline();
+            // 初始化 Logger 和 ResourcesLoader
+            AzathrixFramework.Logger ??= new DefaultLogger();
+            AzathrixFramework.ResourcesLoader ??= new DefaultResourcesLoader();
+
+            _editorPipeline = PipelineFactory.Get<EditorLauncherPipeline>() as EditorLauncherPipeline;
+            if (_editorPipeline == null)
+                return;
 
             var context = new LauncherContext
             {
-                Logger = new DefaultLogger(),
-                ResourcesLoader = new DefaultResourcesLoader(),
                 IsEditor = true,
                 SilentMode = !settings.debugEditorPipeline
             };
@@ -51,7 +56,7 @@ namespace Azathrix.Framework.Editor.Launcher
 
         public static void RefreshEditorPipeline()
         {
-            _editorPipeline?.Refresh();
+            PipelineFactory.Refresh("EditorLauncher");
         }
     }
 }

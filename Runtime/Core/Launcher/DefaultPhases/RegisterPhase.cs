@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Azathrix.Framework.Core.Pipeline;
 using Azathrix.Framework.Tools;
 using Cysharp.Threading.Tasks;
 
@@ -7,9 +8,9 @@ namespace Azathrix.Framework.Core.Launcher.DefaultPhases
     /// <summary>
     /// Register阶段 - 注册系统
     /// </summary>
+    [PhaseId("Register")]
     public class RegisterPhase : IRegisterPhase
     {
-        public string Id => "Register";
         public int Order => 300;
 
         public async UniTask ExecuteAsync(LauncherContext context)

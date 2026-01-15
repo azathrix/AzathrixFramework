@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using Azathrix.Framework.Core.Launcher;
+using Azathrix.Framework.Core.Pipeline;
 using Azathrix.Framework.Interfaces;
 using Azathrix.Framework.Registry;
 using Azathrix.Framework.Settings;
@@ -30,8 +31,8 @@ namespace Azathrix.Framework.Core
         public static bool IsSetup { get; private set; }
 
         public static EventDispatcher Dispatcher { get; private set; } = new();
-        public static ILogger Logger { get; set; }
-        public static IResourcesLoader ResourcesLoader { get; set; }
+        public static ILogger Logger { get; set; } = new DefaultLogger();
+        public static IResourcesLoader ResourcesLoader { get; set; } = new DefaultResourcesLoader();
 
         private static SystemRuntimeManager _runtimeManager;
         private static LauncherPipeline _pipeline;
@@ -109,7 +110,10 @@ namespace Azathrix.Framework.Core
 
             try
             {
-                Logger = new DefaultLogger();
+                // 初始化 Logger 和 ResourcesLoader
+                Logger ??= new DefaultLogger();
+                ResourcesLoader ??= new DefaultResourcesLoader();
+
                 var totalWatch = Stopwatch.StartNew();
 
                 Log.Separator("Azathrix Framework");
@@ -117,13 +121,11 @@ namespace Azathrix.Framework.Core
 
                 LogSystemInfo();
 
-                _pipeline = new LauncherPipeline();
+                _pipeline = PipelineFactory.Get<LauncherPipeline>() as LauncherPipeline;
+                if (_pipeline == null)
+                    throw new Exception("LauncherPipeline 未找到或创建失败");
 
-                var context = new LauncherContext
-                {
-                    Logger = Logger,
-                    ResourcesLoader = new DefaultResourcesLoader()
-                };
+                var context = new LauncherContext();
 
                 await _pipeline.ExecuteAsync(context);
 
@@ -150,18 +152,15 @@ namespace Azathrix.Framework.Core
         /// </summary>
         public static void RefreshPipeline()
         {
-            _pipeline?.Refresh();
+            PipelineFactory.Refresh("Launcher");
         }
 
         // 内部方法供阶段调用
-        public static void SetupInternal(ILogger logger, IResourcesLoader resourcesLoader)
+        public static void MarkSetup()
         {
-            if (IsSetup) return;
-
-            ResourcesLoader = resourcesLoader ?? new DefaultResourcesLoader();
-            Logger = logger ?? new DefaultLogger();
             IsSetup = true;
         }
+
 
         internal static void SetRuntimeManager(SystemRuntimeManager manager)
         {

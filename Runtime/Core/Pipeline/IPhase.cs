@@ -8,11 +8,6 @@ namespace Azathrix.Framework.Core.Pipeline
     public interface IPhase
     {
         /// <summary>
-        /// 阶段ID（用于Hook匹配和日志）
-        /// </summary>
-        string Id { get; }
-
-        /// <summary>
         /// 执行顺序（数值越小越先执行）
         /// </summary>
         int Order { get; }
@@ -24,5 +19,25 @@ namespace Azathrix.Framework.Core.Pipeline
     public interface IPhase<in TContext> : IPhase
     {
         UniTask ExecuteAsync(TContext context);
+    }
+
+    /// <summary>
+    /// 阶段ID特性
+    /// </summary>
+    [System.AttributeUsage(System.AttributeTargets.Class | System.AttributeTargets.Interface, Inherited = true)]
+    public class PhaseIdAttribute : System.Attribute
+    {
+        public string Id { get; }
+        public PhaseIdAttribute(string id) => Id = id;
+    }
+
+    /// <summary>
+    /// 阶段显示名称特性
+    /// </summary>
+    [System.AttributeUsage(System.AttributeTargets.Class | System.AttributeTargets.Interface, Inherited = true)]
+    public class PhaseDisplayNameAttribute : System.Attribute
+    {
+        public string DisplayName { get; }
+        public PhaseDisplayNameAttribute(string displayName) => DisplayName = displayName;
     }
 }

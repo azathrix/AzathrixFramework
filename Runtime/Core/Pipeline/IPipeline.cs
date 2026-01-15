@@ -23,11 +23,6 @@ namespace Azathrix.Framework.Core.Pipeline
         Type PhaseType { get; }
 
         /// <summary>
-        /// 钩子基类型
-        /// </summary>
-        Type HookType { get; }
-
-        /// <summary>
         /// 上下文类型
         /// </summary>
         Type ContextType { get; }

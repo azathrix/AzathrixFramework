@@ -13,16 +13,14 @@ namespace Azathrix.Framework.Editor.Launcher
     /// <summary>
     /// 编辑器阶段执行前钩子
     /// </summary>
-    public interface IBeforeEditorPhaseHook<TPhase> : IBeforePhaseHook<TPhase, LauncherContext>
-        where TPhase : IEditorLauncherPhase
+    public interface IBeforeEditorPhaseHook : IBeforePhaseHook<LauncherContext>
     {
     }
 
     /// <summary>
     /// 编辑器阶段执行后钩子
     /// </summary>
-    public interface IAfterEditorPhaseHook<TPhase> : IAfterPhaseHook<TPhase, LauncherContext>
-        where TPhase : IEditorLauncherPhase
+    public interface IAfterEditorPhaseHook : IAfterPhaseHook<LauncherContext>
     {
     }
 }

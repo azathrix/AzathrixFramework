@@ -23,7 +23,7 @@ namespace Azathrix.Framework.Tools
         private static readonly Color DefaultInfoColor = new(1f, 0.88f, 0.73f);
         private static readonly Color DefaultTagColor = new(0.42f, 1f, 0.5f);
         private static readonly Color DefaultWarningColor = new(1f, 1f, 0.51f);
-        private static readonly Color DefaultErrorColor = new(1f, 0.18f, 0.11f);
+        private static readonly Color DefaultErrorColor = new(1f, 1, 1);
 
         private LogSettings Settings => _settings ??= LogSettings.Instance;
 

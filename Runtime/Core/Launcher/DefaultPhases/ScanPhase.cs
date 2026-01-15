@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Azathrix.Framework.Core.Pipeline;
 using Azathrix.Framework.Tools;
 using Cysharp.Threading.Tasks;
 
@@ -7,9 +8,9 @@ namespace Azathrix.Framework.Core.Launcher.DefaultPhases
     /// <summary>
     /// Scan阶段 - 扫描系统类型
     /// </summary>
+    [PhaseId("Scan")]
     public class ScanPhase : IScanPhase
     {
-        public string Id => "Scan";
         public int Order => 200;
 
         public async UniTask ExecuteAsync(LauncherContext context)

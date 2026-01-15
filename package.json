@@ -10,5 +10,21 @@
     },
     "dependencies": {
         "com.azathrix.unitask": "2.5.10"
-    }
+    },
+    "samples": [
+        {
+            "displayName": "Tests",
+            "description": "框架单元测试和集成测试示例，包含系统注册、管线执行、事件分发等测试用例。导入后需要安装 Test Framework 和 Performance Testing 包",
+            "path": "Tests~"
+        },
+        {
+            "displayName": "Pipeline Sample",
+            "description": "验证全局钩子与类型钩子（具体类、基类、接口）的示例脚本。",
+            "path": "Samples~/PipelineSample"
+        }
+    ],
+    "testables": [
+        "com.unity.test-framework",
+        "com.unity.test-framework.performance"
+    ]
 }

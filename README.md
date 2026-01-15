@@ -257,10 +257,12 @@ Log.LogDict("配置", configDict);
 ### 自定义阶段
 
 ```csharp
-[PhaseOrder(150)] // 在 Setup 之前执行
+[PhaseId("MyPhase")]
 public class MyPhase : ISetupPhase
 {
-    public async UniTask ExecuteAsync(PhaseContext context)
+    public int Order => 150; // 在 Setup 之前执行
+
+    public async UniTask ExecuteAsync(LauncherContext context)
     {
         // 自定义逻辑
         context.Set("myData", someValue); // 存储数据供后续阶段使用
@@ -270,13 +272,17 @@ public class MyPhase : ISetupPhase
 
 ### 阶段钩子
 
+> 注意：`HookTarget` 只能使用“管线 ID + 阶段 ID”进行精准匹配，不支持接口/基类/类型名匹配。  
+> 未标注 `PhaseId` 时，阶段 ID 默认使用类名。
+
 ```csharp
 // 在扫描阶段之前执行
-public class MyBeforeHook : IBeforePhaseHook<IScanPhase>
+[HookTarget("Launcher", "Scan")]
+public class MyBeforeHook : IBeforePhaseHook<LauncherContext>
 {
     public int Order => 0;
 
-    public async UniTask<HookResult> OnBeforeAsync(PhaseContext context)
+    public async UniTask<HookResult> OnBeforeAsync(LauncherContext context)
     {
         // HookResult.Continue - 继续执行
         // HookResult.SkipPhase - 跳过当前阶段
@@ -286,11 +292,12 @@ public class MyBeforeHook : IBeforePhaseHook<IScanPhase>
 }
 
 // 在注册阶段之后执行
-public class MyAfterHook : IAfterPhaseHook<IRegisterPhase>
+[HookTarget("Launcher", "Register")]
+public class MyAfterHook : IAfterPhaseHook<LauncherContext>
 {
     public int Order => 0;
 
-    public async UniTask OnAfterAsync(PhaseContext context)
+    public async UniTask OnAfterAsync(LauncherContext context)
     {
         // 注册完成后的处理
     }
@@ -300,12 +307,13 @@ public class MyAfterHook : IAfterPhaseHook<IRegisterPhase>
 ### 常见用例
 
 ```csharp
-// 热更新：在程序集加载阶段之前
-public class HotUpdateHook : IBeforePhaseHook<IAssemblyLoadPhase>
+// 热更新：在扫描阶段之前
+[HookTarget("Launcher", "Scan")]
+public class HotUpdateHook : IBeforePhaseHook<LauncherContext>
 {
     public int Order => 0;
 
-    public async UniTask<HookResult> OnBeforeAsync(PhaseContext context)
+    public async UniTask<HookResult> OnBeforeAsync(LauncherContext context)
     {
         await CheckAndDownloadUpdate();
         return HookResult.Continue;
@@ -313,11 +321,12 @@ public class HotUpdateHook : IBeforePhaseHook<IAssemblyLoadPhase>
 }
 
 // 自定义资源加载器
-public class CustomLoaderHook : IBeforePhaseHook<ISetupPhase>
+[HookTarget("Launcher", "Setup")]
+public class CustomLoaderHook : IBeforePhaseHook<LauncherContext>
 {
     public int Order => 0;
 
-    public async UniTask<HookResult> OnBeforeAsync(PhaseContext context)
+    public async UniTask<HookResult> OnBeforeAsync(LauncherContext context)
     {
         context.ResourcesLoader = new MyResourcesLoader();
         return HookResult.Continue;
@@ -325,11 +334,12 @@ public class CustomLoaderHook : IBeforePhaseHook<ISetupPhase>
 }
 
 // 加载首场景
-public class LoadSceneHook : IAfterPhaseHook<IStartPhase>
+[HookTarget("Launcher", "Start")]
+public class LoadSceneHook : IAfterPhaseHook<LauncherContext>
 {
     public int Order => 0;
 
-    public async UniTask OnAfterAsync(PhaseContext context)
+    public async UniTask OnAfterAsync(LauncherContext context)
     {
         await SceneManager.LoadSceneAsync("MainMenu");
     }
