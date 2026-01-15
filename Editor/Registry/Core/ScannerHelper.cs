@@ -2,22 +2,26 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using Azathrix.Framework.Core.Configs;
 
 namespace Azathrix.Framework.Editor.Registry
 {
+    /// <summary>
+    /// 程序集扫描辅助类
+    /// </summary>
     public static class ScannerHelper
     {
-        public static IEnumerable<Assembly> GetAssemblies(ScannerConfig config)
+        private static readonly string[] ExcludePrefixes =
         {
-            if (config?.Assemblies?.Count > 0)
-                return config.Assemblies;
+            "System", "Microsoft", "Unity", "mscorlib", "netstandard", "Mono", "nunit"
+        };
 
+        public static IEnumerable<Assembly> GetAssemblies()
+        {
             return AppDomain.CurrentDomain.GetAssemblies()
-                .Where(a => ShouldScanAssembly(a, config));
+                .Where(ShouldScanAssembly);
         }
 
-        public static bool ShouldScanAssembly(Assembly assembly, ScannerConfig config)
+        public static bool ShouldScanAssembly(Assembly assembly)
         {
             var name = assembly.GetName().Name;
 
@@ -26,15 +30,8 @@ namespace Azathrix.Framework.Editor.Registry
                 return false;
 
             // 排除系统程序集
-            if (config?.ExcludeAssemblyPrefixes != null)
-            {
-                if (config.ExcludeAssemblyPrefixes.Any(p => name.StartsWith(p)))
-                    return false;
-            }
-
-            // 如果指定了前缀过滤
-            if (config?.AssemblyPrefixes?.Count > 0)
-                return config.AssemblyPrefixes.Any(p => name.StartsWith(p));
+            if (ExcludePrefixes.Any(p => name.StartsWith(p)))
+                return false;
 
             return true;
         }

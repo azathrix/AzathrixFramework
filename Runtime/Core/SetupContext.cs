@@ -1,4 +1,3 @@
-using Azathrix.Framework.Core.Configs;
 using Azathrix.Framework.Interfaces;
 
 namespace Azathrix.Framework.Core
@@ -17,15 +16,5 @@ namespace Azathrix.Framework.Core
         /// 日志记录器，用于输出框架日志
         /// </summary>
         public ILogger Logger { get; set; }
-
-        /// <summary>
-        /// 系统扫描器配置，控制如何扫描和发现游戏系统
-        /// </summary>
-        public ScannerConfig ScannerConfig { set; get; }
-
-        /// <summary>
-        /// 运行时配置，包含性能统计、条件符号等设置
-        /// </summary>
-        public RuntimeConfig runtimeConfig { set; get; }
     }
 }

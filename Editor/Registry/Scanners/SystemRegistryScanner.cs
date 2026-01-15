@@ -4,7 +4,6 @@ using System.Reflection;
 using Azathrix.Framework.Core.Attributes;
 using Azathrix.Framework.Interfaces;
 using Azathrix.Framework.Registry;
-using Azathrix.Framework.Settings;
 using UnityEditor;
 using UnityEngine;
 
@@ -21,8 +20,6 @@ namespace Azathrix.Framework.Editor.Registry
                 return;
             }
 
-            var config = AzathrixFrameworkSettings.Instance?.ToScannerConfig();
-
             // 先扫描到临时列表，验证后再更新
             var newEntries = new List<SystemEntry>();
             var newInterfaceEntries = new List<InterfaceEntry>();
@@ -30,7 +27,7 @@ namespace Azathrix.Framework.Editor.Registry
             var existingInterfaces = registry.interfaceEntries.ToDictionary(e => e.typeName);
             var interfaceImplementations = new Dictionary<string, List<string>>();
 
-            foreach (var assembly in ScannerHelper.GetAssemblies(config))
+            foreach (var assembly in ScannerHelper.GetAssemblies())
             {
                 foreach (var type in ScannerHelper.GetTypes(assembly))
                 {

@@ -1,8 +1,5 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
-using Azathrix.Framework.Core.Configs;
 using Azathrix.Framework.Interfaces;
 using Azathrix.Framework.Registry;
 using Cysharp.Threading.Tasks;
@@ -10,31 +7,22 @@ using Cysharp.Threading.Tasks;
 namespace Azathrix.Framework.Core
 {
     /// <summary>
-    /// 游戏系统扫描器
+    /// 游戏系统扫描器（从注册表读取）
     /// </summary>
     public class SystemScanner
     {
         private readonly ILogger _logger;
-        private readonly ScannerConfig _config;
 
-        /// <summary>
-        /// 创建游戏系统扫描器实例
-        /// </summary>
-        /// <param name="logger">日志记录器</param>
-        /// <param name="config">扫描配置，为空则使用默认配置</param>
-        public SystemScanner(ILogger logger, ScannerConfig config = null)
+        public SystemScanner(ILogger logger)
         {
             _logger = logger;
-            _config = config ?? new ScannerConfig();
         }
 
         /// <summary>
         /// 异步扫描所有符合条件的游戏系统类型
         /// </summary>
-        /// <returns>扫描到的系统类型数组</returns>
         public async UniTask<Type[]> ScanAsync()
         {
-            // 从 SystemRegistry 读取
             var registry = SystemRegistry.Instance;
             if (registry != null && registry.entries.Count > 0)
             {
@@ -47,119 +35,24 @@ namespace Azathrix.Framework.Core
                 return types;
             }
 
-            // 注册表为空，记录错误并返回空数组
             _logger.Error("[Scanner] SystemRegistry 为空或未初始化，无法加载系统");
             await UniTask.Yield();
             return Array.Empty<Type>();
         }
 
-        /// <summary>
-        /// 通过反射扫描系统类型（Fallback）
-        /// </summary>
-        private async UniTask<Type[]> ScanByReflectionAsync()
-        {
-            var result = new List<Type>();
-            var assemblies = GetAssembliesToScan().ToList();
-
-            _logger.Info($"[Scanner] 开始扫描，共 {assemblies.Count} 个程序集");
-
-            foreach (var assembly in assemblies)
-            {
-                try
-                {
-                    var types = ScanAssembly(assembly);
-                    if (types.Length > 0)
-                    {
-                        _logger.Info($"[Scanner]   {assembly.GetName().Name}: 发现 {types.Length} 个系统");
-                        result.AddRange(types);
-                    }
-                }
-                catch (Exception e)
-                {
-                    _logger.Warning($"[Scanner]   {assembly.GetName().Name}: 扫描失败 - {e.Message}");
-                }
-            }
-
-            await UniTask.Yield();
-
-            _logger.Info($"[Scanner] 扫描结束，共发现 {result.Count} 个系统类型");
-            return result.ToArray();
-        }
-
-        /// <summary>
-        /// 获取需要扫描的程序集列表
-        /// </summary>
-        private IEnumerable<Assembly> GetAssembliesToScan()
-        {
-            // 如果指定了程序集，直接使用
-            if (_config.Assemblies.Count > 0)
-                return _config.Assemblies;
-
-            // 否则扫描所有程序集，应用过滤
-            return AppDomain.CurrentDomain.GetAssemblies()
-                .Where(ShouldScanAssembly);
-        }
-
-        /// <summary>
-        /// 判断程序集是否应该被扫描
-        /// </summary>
-        /// <param name="assembly">待检查的程序集</param>
-        /// <returns>是否应该扫描该程序集</returns>
-        private bool ShouldScanAssembly(Assembly assembly)
-        {
-            var name = assembly.GetName().Name;
-
-            // 跳过 Unity 热重载产生的临时程序集
-            if (name.Contains("-") && name.Length > 50)
-                return false;
-
-            // 排除系统程序集
-            if (_config.ExcludeAssemblyPrefixes.Any(p => name.StartsWith(p)))
-                return false;
-
-            // 如果指定了前缀过滤，检查是否匹配
-            if (_config.AssemblyPrefixes.Count > 0)
-                return _config.AssemblyPrefixes.Any(p => name.StartsWith(p));
-
-            return true;
-        }
-
-        /// <summary>
-        /// 扫描单个程序集中的系统类型
-        /// </summary>
-        /// <param name="assembly">要扫描的程序集</param>
-        /// <returns>该程序集中的有效系统类型数组</returns>
-        private Type[] ScanAssembly(Assembly assembly)
-        {
-            return assembly.GetTypes()
-                .Where(IsValidSystemType)
-                .ToArray();
-        }
-
-        /// <summary>
-        /// 验证类型是否为有效的游戏系统类型
-        /// </summary>
-        /// <param name="type">待验证的类型</param>
-        /// <returns>是否为有效的系统类型</returns>
         private bool IsValidSystemType(Type type)
         {
-            // 基本条件
             if (!typeof(ISystem).IsAssignableFrom(type))
                 return false;
             if (type.IsAbstract || type.IsInterface)
                 return false;
 
-            // 检查系统注册配置（编辑器禁用的系统）
             var registry = SystemRegistry.Instance;
             if (registry != null && registry.IsSystemDisabled(type))
             {
                 _logger.Info($"系统被禁用: {type.FullName}");
                 return false;
             }
-
-            // 自定义过滤器
-            if (_config.TypeFilter != null && !_config.TypeFilter(type))
-                return false;
 
             return true;
         }

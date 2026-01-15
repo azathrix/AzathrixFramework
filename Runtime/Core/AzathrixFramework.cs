@@ -5,8 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using Azathrix.Framework.Core.Configs;
-using Azathrix.Framework.Core.Startup;
+using Azathrix.Framework.Core.Launcher;
 using Azathrix.Framework.Interfaces;
 using Azathrix.Framework.Registry;
 using Azathrix.Framework.Settings;
@@ -33,15 +32,12 @@ namespace Azathrix.Framework.Core
         public static EventDispatcher Dispatcher { get; private set; } = new();
         public static ILogger Logger { get; set; }
         public static IResourcesLoader ResourcesLoader { get; set; }
-        public static ScannerConfig ScannerConfig { get; private set; }
-        public static RuntimeConfig RuntimeConfig { get; private set; }
 
         private static SystemRuntimeManager _runtimeManager;
-        private static StartupPipeline _pipeline;
+        private static LauncherPipeline _pipeline;
 
 #if UNITY_EDITOR
         private static SystemRuntimeManager _editorRuntimeManager;
-        private static StartupPipeline _editorPipeline;
 
         public static SystemRuntimeManager EffectiveRuntimeManager =>
             EditorApplication.isPlaying ? _runtimeManager : _editorRuntimeManager;
@@ -55,129 +51,18 @@ namespace Azathrix.Framework.Core
         [InitializeOnLoadMethod]
         static void EditorInitialize()
         {
-            EditorApplication.delayCall += () => InitializeEditorAsync().Forget();
-
             EditorApplication.playModeStateChanged += state =>
             {
                 if (state == PlayModeStateChange.ExitingPlayMode)
                     Reset();
                 else if (state == PlayModeStateChange.EnteredEditMode)
-                {
                     ResetEditorRuntime();
-                    EditorApplication.delayCall += () => InitializeEditorAsync().Forget();
-                }
             };
-
-            SystemRegistry.OnRegistryChanged += () =>
-            {
-                if (!EditorApplication.isPlayingOrWillChangePlaymode)
-                    RefreshEditorPipelineAsync().Forget();
-            };
-            PhaseRegistry.OnRegistryChanged += () =>
-            {
-                if (!EditorApplication.isPlayingOrWillChangePlaymode)
-                    RefreshEditorPipelineAsync().Forget();
-            };
-            StartupHookRegistry.OnRegistryChanged += () =>
-            {
-                if (!EditorApplication.isPlayingOrWillChangePlaymode)
-                    RefreshEditorPipelineAsync().Forget();
-            };
-        }
-
-        private static async UniTask InitializeEditorAsync()
-        {
-            if (EditorApplication.isPlayingOrWillChangePlaymode)
-                return;
-
-            var settings = AzathrixFrameworkSettings.Instance;
-            var scannerConfig = settings.ToScannerConfig();
-
-            Logger ??= new DefaultLogger();
-
-            _editorPipeline = new StartupPipeline(Logger, scannerConfig, isEditorMode: true)
-            {
-                SilentMode = !settings.debugEditorPipeline
-            };
-
-            var context = new PhaseContext
-            {
-                Logger = Logger,
-                ResourcesLoader = new DefaultResourcesLoader(),
-                IsEditor = true
-            };
-
-            await _editorPipeline.ExecuteAsync(context);
-        }
-
-        private static async UniTask RefreshEditorPipelineAsync()
-        {
-            if (_editorRuntimeManager == null || EditorApplication.isPlayingOrWillChangePlaymode)
-                return;
-
-            // 只重新执行扫描和注册阶段，不重新执行整个管线
-            var settings = AzathrixFrameworkSettings.Instance;
-            var scannerConfig = settings.ToScannerConfig();
-
-            // 重新扫描编辑器系统
-            var context = new PhaseContext
-            {
-                Logger = Logger,
-                ResourcesLoader = ResourcesLoader,
-                IsEditor = true
-            };
-
-            // 使用新的扫描阶段获取类型
-            var scanPhase = new Startup.DefaultPhases.Editor.EditorScanPhase();
-            await scanPhase.ExecuteAsync(context);
-
-            // 同步系统：移除不存在的，添加新的
-            await SyncEditorSystemsAsync(context.ScannedSystemTypes);
-        }
-
-        private static async UniTask SyncEditorSystemsAsync(Type[] expectedTypes)
-        {
-            if (_editorRuntimeManager == null)
-                return;
-
-            var expectedSet = new HashSet<Type>(expectedTypes);
-            var registeredTypes = new HashSet<Type>();
-            foreach (var sys in _editorRuntimeManager.GetAllSystems())
-                registeredTypes.Add(sys.GetType());
-
-            // 移除不应该存在的系统
-            foreach (var type in registeredTypes)
-            {
-                if (!expectedSet.Contains(type))
-                    _editorRuntimeManager.UnRegister(type);
-            }
-
-            // 注册新系统
-            foreach (var type in expectedTypes)
-            {
-                if (!registeredTypes.Contains(type))
-                {
-                    await _editorRuntimeManager.RegisterSystemAsync(type);
-                    var system = _editorRuntimeManager.GetAllSystems().FirstOrDefault(s => s.GetType() == type);
-                    if (system is Interfaces.SystemEvents.ISystemEditorSupport editorSupport)
-                    {
-                        try
-                        {
-                            editorSupport.OnEditorInitialize();
-                        }
-                        catch (Exception e)
-                        {
-                            Debug.LogException(e);
-                        }
-                    }
-                }
-            }
         }
 
         public static void ResetEditorRuntime()
         {
             _editorRuntimeManager = null;
-            _editorPipeline = null;
             IsSetup = false;
         }
 
@@ -190,11 +75,8 @@ namespace Azathrix.Framework.Core
         static void Reset()
         {
             Logger = null;
-            ScannerConfig = null;
-            RuntimeConfig = null;
 #if UNITY_EDITOR
             _editorRuntimeManager = null;
-            _editorPipeline = null;
 #endif
             IsApplicationStarted = false;
             IsStarted = false;
@@ -235,10 +117,9 @@ namespace Azathrix.Framework.Core
 
                 LogSystemInfo();
 
-                var settings = AzathrixFrameworkSettings.Instance;
-                _pipeline = new StartupPipeline(Logger, settings.ToScannerConfig());
+                _pipeline = new LauncherPipeline();
 
-                var context = new PhaseContext
+                var context = new LauncherContext
                 {
                     Logger = Logger,
                     ResourcesLoader = new DefaultResourcesLoader()
@@ -270,21 +151,15 @@ namespace Azathrix.Framework.Core
         public static void RefreshPipeline()
         {
             _pipeline?.Refresh();
-#if UNITY_EDITOR
-            _editorPipeline?.Refresh();
-#endif
         }
 
         // 内部方法供阶段调用
-        internal static void SetupInternal(ILogger logger, IResourcesLoader resourcesLoader,
-            ScannerConfig scannerConfig, RuntimeConfig runtimeConfig)
+        public static void SetupInternal(ILogger logger, IResourcesLoader resourcesLoader)
         {
             if (IsSetup) return;
 
             ResourcesLoader = resourcesLoader ?? new DefaultResourcesLoader();
             Logger = logger ?? new DefaultLogger();
-            ScannerConfig = scannerConfig;
-            RuntimeConfig = runtimeConfig;
             IsSetup = true;
         }
 

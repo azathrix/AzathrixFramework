@@ -1,3 +1,4 @@
+using Azathrix.Framework.Editor.Pipeline;
 using UnityEditor;
 using UnityEngine;
 
@@ -29,8 +30,7 @@ namespace Azathrix.Framework.Editor.Registry
             }
 
             SystemRegistryScanner.Scan();
-            PhaseRegistryScanner.Scan();
-            HookRegistryScanner.Scan();
+            PipelineRegistryScanner.ScanAll();
 
             AssetDatabase.SaveAssets();
         }
