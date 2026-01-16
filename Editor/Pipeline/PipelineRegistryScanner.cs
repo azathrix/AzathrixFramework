@@ -50,6 +50,7 @@ namespace Azathrix.Framework.Editor.Pipeline
             changed |= ScanPhasesAndHooks(registry, assemblies);
             var phasesHooksMs = watch.Elapsed.TotalMilliseconds;
 
+            changed |= CleanupUnregisteredEntries(registry);
             changed |= CleanupMissingEntries(registry);
             changed |= CleanupEmptyTargets(registry);
             changed |= CleanupOrphanHooks(registry);
@@ -84,6 +85,33 @@ namespace Azathrix.Framework.Editor.Pipeline
                     changed = true;
             }
             return changed;
+        }
+
+        private static bool CleanupUnregisteredEntries(PipelineRegistry registry)
+        {
+            var removedAny = false;
+            foreach (var pipeline in registry.pipelines.ToList())
+            {
+                var pipelineType = pipeline.GetPipelineType();
+                if (pipelineType != null && pipelineType.GetCustomAttribute<RegisterAttribute>() == null)
+                {
+                    registry.pipelines.Remove(pipeline);
+                    removedAny = true;
+                    continue;
+                }
+
+                if (pipeline.phases.RemoveAll(p =>
+                        p.GetRuntimeType() != null && p.GetRuntimeType().GetCustomAttribute<RegisterAttribute>() == null) > 0)
+                    removedAny = true;
+
+                if (pipeline.hooks.RemoveAll(h =>
+                        h.GetRuntimeType() != null && h.GetRuntimeType().GetCustomAttribute<RegisterAttribute>() == null) > 0)
+                    removedAny = true;
+            }
+
+            if (removedAny)
+                registry.ClearCache();
+            return removedAny;
         }
 
         private static bool CleanupMissingEntries(PipelineRegistry registry)
@@ -204,6 +232,7 @@ namespace Azathrix.Framework.Editor.Pipeline
                     {
                         if (type.IsAbstract || type.IsInterface) continue;
                         if (!typeof(IPipeline).IsAssignableFrom(type)) continue;
+                        if (type.GetCustomAttribute<RegisterAttribute>() == null) continue;
                         pipelineTypes.Add(type);
                     }
                 }

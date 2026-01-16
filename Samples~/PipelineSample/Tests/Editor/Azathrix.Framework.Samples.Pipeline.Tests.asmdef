@@ -1,6 +1,6 @@
 {
-    "name": "Azathrix.EventDispatcher.Tests",
-    "rootNamespace": "Azathrix.EventDispatcher.Tests",
+    "name": "Azathrix.Framework.Samples.Pipeline.Tests",
+    "rootNamespace": "Azathrix.Framework.Samples.Pipeline.Tests",
     "references": [
         "Azathrix.Framework.Runtime",
         "Azathrix.Framework.Editor",

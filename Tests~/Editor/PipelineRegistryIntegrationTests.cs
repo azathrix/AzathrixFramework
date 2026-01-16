@@ -32,6 +32,9 @@ namespace Azathrix.Framework.Tests
         [PipelineId("RegistryPipeline")]
         private class RegistryPipeline : PipelineBase<IRegistryPhase, RegistryContext> { }
 
+        [PipelineId("RegistryPipelineManual")]
+        private class RegistryManualPipeline : PipelineBase<IRegistryPhase, RegistryContext> { }
+
         private class RegistryContext : PipelineContext { }
 
         private interface IRegistryPhase : IPhase<RegistryContext> { }
@@ -162,6 +165,40 @@ namespace Azathrix.Framework.Tests
             public UniTask ExecuteAsync(RegistryContext context)
             {
                 RegistryTestLog.Log?.Add("Phase:B");
+                return UniTask.CompletedTask;
+            }
+        }
+
+        [PhaseId("Manual")]
+        private class ManualPhase : IRegistryPhase
+        {
+            public int Order => 150;
+
+            public UniTask ExecuteAsync(RegistryContext context)
+            {
+                RegistryTestLog.Log?.Add("Phase:Manual");
+                return UniTask.CompletedTask;
+            }
+        }
+
+        private class ManualPhaseBeforeHook : IBeforePhaseHook<RegistryContext>
+        {
+            public int Order => 0;
+
+            public UniTask<HookResult> OnBeforeAsync(RegistryContext context)
+            {
+                RegistryTestLog.Log?.Add("Before:Manual");
+                return UniTask.FromResult(HookResult.Continue);
+            }
+        }
+
+        private class ManualRegistryAfterHook : IAfterPhaseHook<RegistryContext>
+        {
+            public int Order => 0;
+
+            public UniTask OnAfterAsync(RegistryContext context)
+            {
+                RegistryTestLog.Log?.Add("After:ManualRegistry");
                 return UniTask.CompletedTask;
             }
         }
@@ -315,6 +352,102 @@ namespace Azathrix.Framework.Tests
             await runtime.ExecuteAsync(new RegistryContext());
 
             Assert.AreEqual(new[] { "Before:Multi", "Phase:A", "Before:Multi", "Phase:B" }, RegistryTestLog.Log.ToArray());
+        }
+
+        [Test]
+        public async Task Registry_AllowsManualPhasesAndHooks()
+        {
+            RegistryTestLog.Log = new List<string>();
+
+            var pipeline = _registry.GetOrCreatePipeline("RegistryPipelineManual");
+            pipeline.pipelineTypeName = typeof(RegistryManualPipeline).FullName;
+            pipeline.pipelineAssembly = typeof(RegistryManualPipeline).Assembly.GetName().Name;
+            pipeline.phases.Add(new PhaseEntry
+            {
+                typeName = typeof(RegistryPhase).FullName,
+                assemblyName = typeof(RegistryPhase).Assembly.GetName().Name,
+                order = 100,
+                enabled = true,
+                phaseId = "Registry"
+            });
+
+            var runtime = PipelineFactory.Get("RegistryPipelineManual") as RegistryManualPipeline;
+            runtime.SilentMode = true;
+            runtime.AddPhase(new ManualPhase(), "ManualCustom");
+            runtime.AddBeforeHook("ManualCustom", new ManualPhaseBeforeHook());
+            runtime.AddAfterHook("Registry", new ManualRegistryAfterHook());
+
+            await runtime.ExecuteAsync(new RegistryContext());
+
+            Assert.Contains("Phase:Registry", RegistryTestLog.Log);
+            Assert.Contains("Phase:Manual", RegistryTestLog.Log);
+            Assert.Contains("Before:Manual", RegistryTestLog.Log);
+            Assert.Contains("After:ManualRegistry", RegistryTestLog.Log);
+        }
+
+        [Test]
+        public async Task Registry_PhaseDisabled_SkipsExecution()
+        {
+            RegistryTestLog.Log = new List<string>();
+
+            var pipeline = _registry.GetOrCreatePipeline("RegistryPipeline");
+            pipeline.pipelineTypeName = typeof(RegistryPipeline).FullName;
+            pipeline.pipelineAssembly = typeof(RegistryPipeline).Assembly.GetName().Name;
+            pipeline.phases.Add(new PhaseEntry
+            {
+                typeName = typeof(PhaseA).FullName,
+                assemblyName = typeof(PhaseA).Assembly.GetName().Name,
+                order = 100,
+                enabled = true,
+                phaseId = "PhaseA"
+            });
+            pipeline.phases.Add(new PhaseEntry
+            {
+                typeName = typeof(PhaseB).FullName,
+                assemblyName = typeof(PhaseB).Assembly.GetName().Name,
+                order = 200,
+                enabled = false,
+                phaseId = "PhaseB"
+            });
+
+            var runtime = PipelineFactory.Get("RegistryPipeline") as RegistryPipeline;
+            await runtime.ExecuteAsync(new RegistryContext());
+
+            Assert.Contains("Phase:A", RegistryTestLog.Log);
+            Assert.IsFalse(RegistryTestLog.Log.Contains("Phase:B"));
+        }
+
+        [Test]
+        public async Task Registry_CustomOrder_Respected()
+        {
+            RegistryTestLog.Log = new List<string>();
+
+            var pipeline = _registry.GetOrCreatePipeline("RegistryPipeline");
+            pipeline.pipelineTypeName = typeof(RegistryPipeline).FullName;
+            pipeline.pipelineAssembly = typeof(RegistryPipeline).Assembly.GetName().Name;
+            pipeline.phases.Add(new PhaseEntry
+            {
+                typeName = typeof(PhaseA).FullName,
+                assemblyName = typeof(PhaseA).Assembly.GetName().Name,
+                order = 200,
+                hasCustomOrder = true,
+                enabled = true,
+                phaseId = "PhaseA"
+            });
+            pipeline.phases.Add(new PhaseEntry
+            {
+                typeName = typeof(PhaseB).FullName,
+                assemblyName = typeof(PhaseB).Assembly.GetName().Name,
+                order = 100,
+                hasCustomOrder = true,
+                enabled = true,
+                phaseId = "PhaseB"
+            });
+
+            var runtime = PipelineFactory.Get("RegistryPipeline") as RegistryPipeline;
+            await runtime.ExecuteAsync(new RegistryContext());
+
+            Assert.AreEqual(new[] { "Phase:B", "Phase:A" }, RegistryTestLog.Log.ToArray());
         }
     }
 }

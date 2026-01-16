@@ -9,6 +9,7 @@ namespace Azathrix.Framework.Editor.Launcher
     /// </summary>
     [PipelineId("EditorLauncher")]
     [PipelineDisplayName("编辑器启动")]
+    [Register]
     public class EditorLauncherPipeline : PipelineBase<IEditorLauncherPhase, LauncherContext>
     {
         /// <summary>

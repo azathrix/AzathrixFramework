@@ -8,7 +8,7 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 
-namespace Azathrix.Framework.Tests
+namespace Azathrix.Framework.Samples.Pipeline.Tests
 {
     public class HookEdgeCaseTests
     {

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using Azathrix.Framework.Core.Launcher;
 using Azathrix.Framework.Core.Pipeline;
 using Cysharp.Threading.Tasks;
@@ -46,6 +47,7 @@ namespace Azathrix.Framework.Samples.Pipeline
 
     [PipelineId("SamplePipeline")]
     [PipelineDisplayName("Pipeline Sample")]
+    [Register]
     internal class SamplePipeline : PipelineBase<ISamplePhase, SampleContext>
     {
     }
@@ -54,90 +56,43 @@ namespace Azathrix.Framework.Samples.Pipeline
 
     internal interface ISamplePhase : IPhase<SampleContext> { }
 
-    internal interface ISampleTaggedPhase : ISamplePhase { }
-
     [PipelineId("SamplePipeline")]
-    [PhaseId("Base")]
+    [PhaseId("Sample")]
     [Register]
-    internal abstract class SampleBasePhase : ISamplePhase
+    internal class SamplePhase : ISamplePhase
     {
         public int Order => 100;
 
-        public virtual UniTask ExecuteAsync(SampleContext context)
+        public UniTask ExecuteAsync(SampleContext context)
         {
-            SamplePipelineRuntime.Add("Phase:Base");
-            return UniTask.CompletedTask;
-        }
-    }
-
-    [PipelineId("SamplePipeline")]
-    [PhaseId("Derived")]
-    [Register]
-    internal class SampleDerivedPhase : SampleBasePhase, ISampleTaggedPhase
-    {
-        public override UniTask ExecuteAsync(SampleContext context)
-        {
-            SamplePipelineRuntime.Add("Phase:Derived");
+            SamplePipelineRuntime.Add("Phase:Sample");
             return UniTask.CompletedTask;
         }
     }
 
     [Register]
-    [HookTarget("SamplePipeline", "Base")]
-    [HookTarget("SamplePipeline", "Derived")]
-    internal class SampleGlobalHook : IHook<SampleContext>
+    [HookTarget("SamplePipeline", "Sample")]
+    internal class SampleBeforeHook : IBeforePhaseHook<SampleContext>
     {
-        public int Order => 5;
+        public int Order => 0;
 
         public UniTask<HookResult> OnBeforeAsync(SampleContext context)
         {
-            SamplePipelineRuntime.Add("Before:Global");
+            SamplePipelineRuntime.Add("Before:Sample");
             return UniTask.FromResult(HookResult.Continue);
         }
+    }
+
+    [Register]
+    [HookTarget("SamplePipeline", "Sample")]
+    internal class SampleAfterHook : IAfterPhaseHook<SampleContext>
+    {
+        public int Order => 0;
 
         public UniTask OnAfterAsync(SampleContext context)
         {
-            SamplePipelineRuntime.Add("After:Global");
+            SamplePipelineRuntime.Add("After:Sample");
             return UniTask.CompletedTask;
-        }
-    }
-
-    [Register]
-    [HookTarget("SamplePipeline", "Base")]
-    internal class SampleBaseBeforeHook : IBeforePhaseHook<SampleContext>
-    {
-        public int Order => 10;
-
-        public UniTask<HookResult> OnBeforeAsync(SampleContext context)
-        {
-            SamplePipelineRuntime.Add("Before:BaseClass");
-            return UniTask.FromResult(HookResult.Continue);
-        }
-    }
-
-    [Register]
-    [HookTarget("SamplePipeline", "Derived")]
-    internal class SampleInterfaceBeforeHook : IBeforePhaseHook<SampleContext>
-    {
-        public int Order => 20;
-
-        public UniTask<HookResult> OnBeforeAsync(SampleContext context)
-        {
-            SamplePipelineRuntime.Add("Before:Interface");
-            return UniTask.FromResult(HookResult.Continue);
-        }
-    }
-
-    [Register]
-    [HookTarget("SamplePipeline", "Derived")]
-    internal class SampleConcreteBeforeHook : IBeforePhaseHook<SampleContext>
-    {
-        public int Order => 30;
-
-        public UniTask<HookResult> OnBeforeAsync(SampleContext context)
-        {
-            SamplePipelineRuntime.Add("Before:Concrete");
-            return UniTask.FromResult(HookResult.Continue);
         }
     }
 

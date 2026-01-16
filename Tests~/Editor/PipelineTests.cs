@@ -168,6 +168,77 @@ namespace Azathrix.Framework.Tests
             }
         }
 
+        [HookTarget("TestPipeline", "A")]
+        private class NonGenericBeforeHook : IBeforePhaseHook
+        {
+            public int Order => 10;
+            private readonly List<string> _log;
+
+            public NonGenericBeforeHook(List<string> log) => _log = log;
+
+            public UniTask<HookResult> OnBeforeAsync(PipelineContext context)
+            {
+                _log.Add("Before:NonGeneric");
+                return UniTask.FromResult(HookResult.Continue);
+            }
+        }
+
+        [HookTarget("TestPipeline", "A")]
+        private class NonGenericAfterHook : IAfterPhaseHook
+        {
+            public int Order => 20;
+            private readonly List<string> _log;
+
+            public NonGenericAfterHook(List<string> log) => _log = log;
+
+            public UniTask OnAfterAsync(PipelineContext context)
+            {
+                _log.Add("After:NonGeneric");
+                return UniTask.CompletedTask;
+            }
+        }
+
+        [HookTarget("TestPipeline", "A")]
+        private class NonGenericHook : IHook
+        {
+            public int Order => 0;
+            private readonly List<string> _log;
+
+            public NonGenericHook(List<string> log) => _log = log;
+
+            public UniTask<HookResult> OnBeforeAsync(PipelineContext context)
+            {
+                _log.Add("Before:NonGenericBoth");
+                return UniTask.FromResult(HookResult.Continue);
+            }
+
+            public UniTask OnAfterAsync(PipelineContext context)
+            {
+                _log.Add("After:NonGenericBoth");
+                return UniTask.CompletedTask;
+            }
+        }
+
+        private class ManualIdHook : IBeforePhaseHook<TestContext>
+        {
+            public int Order { get; }
+            private readonly List<string> _log;
+            private readonly string _name;
+
+            public ManualIdHook(int order, List<string> log, string name)
+            {
+                Order = order;
+                _log = log;
+                _name = name;
+            }
+
+            public UniTask<HookResult> OnBeforeAsync(TestContext context)
+            {
+                _log.Add($"Before:{_name}");
+                return UniTask.FromResult(HookResult.Continue);
+            }
+        }
+
         private interface ISpecialPhase : ITestPhase { }
 
         private class BasePhase : ITestPhase
@@ -472,6 +543,45 @@ namespace Azathrix.Framework.Tests
             await pipeline.ExecuteAsync(new TestContext());
 
             Assert.AreEqual(new[] { "Before:A", "Before:C", "Before:B", "Phase:Base" }, log.ToArray());
+        }
+
+        [Test]
+        public async Task Hook_NonGenericHooks_Execute()
+        {
+            var log = new List<string>();
+            var pipeline = new TestPipeline { SilentMode = true };
+
+            pipeline.AddPhase(new PhaseA(log));
+            pipeline.AddHook("A", new NonGenericHook(log));
+            pipeline.AddBeforeHook("A", new NonGenericBeforeHook(log));
+            pipeline.AddAfterHook("A", new NonGenericAfterHook(log));
+
+            await pipeline.ExecuteAsync(new TestContext());
+
+            Assert.AreEqual(new[]
+            {
+                "Before:NonGenericBoth",
+                "Before:NonGeneric",
+                "Phase:A",
+                "After:NonGenericBoth",
+                "After:NonGeneric"
+            }, log.ToArray());
+        }
+
+        [Test]
+        public async Task ManualPhase_CustomId_AndOrderOverride()
+        {
+            var log = new List<string>();
+            var pipeline = new TestPipeline { SilentMode = true };
+
+            pipeline.AddPhase(new RecordingPhase("First", 200, log), "PhaseX", 200);
+            pipeline.AddPhase(new RecordingPhase("Second", 100, log), "PhaseY", 100);
+            pipeline.AddBeforeHook("PhaseX", new ManualIdHook(0, log, "A"), 200);
+            pipeline.AddBeforeHook("PhaseX", new ManualIdHook(0, log, "B"), 100);
+
+            await pipeline.ExecuteAsync(new TestContext());
+
+            Assert.AreEqual(new[] { "Phase:Second", "Before:B", "Before:A", "Phase:First" }, log.ToArray());
         }
     }
 }

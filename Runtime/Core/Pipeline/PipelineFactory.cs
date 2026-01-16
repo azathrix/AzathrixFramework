@@ -26,6 +26,42 @@ namespace Azathrix.Framework.Core.Pipeline
             return (T)Get(id);
         }
 
+        public static T CreateEmpty<T>() where T : IPipeline
+        {
+            try
+            {
+                return (T)Activator.CreateInstance(typeof(T));
+            }
+            catch (Exception e)
+            {
+                Log.Error($"[PipelineFactory] 创建空管线 {typeof(T).FullName} 失败: {e}");
+                return default;
+            }
+        }
+
+        public static IPipeline CreateEmpty(string pipelineId)
+        {
+            if (string.IsNullOrEmpty(pipelineId))
+                return null;
+
+            var pipelineType = FindPipelineTypeById(pipelineId);
+            if (pipelineType == null)
+            {
+                Log.Warning($"[PipelineFactory] 未找到管线类型: {pipelineId}");
+                return null;
+            }
+
+            try
+            {
+                return (IPipeline)Activator.CreateInstance(pipelineType);
+            }
+            catch (Exception e)
+            {
+                Log.Error($"[PipelineFactory] 创建空管线 {pipelineType.FullName} 失败: {e}");
+                return null;
+            }
+        }
+
         public static IPipeline Get(string pipelineId)
         {
             if (string.IsNullOrEmpty(pipelineId))

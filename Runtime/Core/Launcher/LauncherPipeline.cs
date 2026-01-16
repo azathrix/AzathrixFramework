@@ -7,6 +7,7 @@ namespace Azathrix.Framework.Core.Launcher
     /// </summary>
     [PipelineId("Launcher")]
     [PipelineDisplayName("运行时启动")]
+    [Register]
     public class LauncherPipeline : PipelineBase<ILauncherPhase, LauncherContext>
     {
         /// <summary>
