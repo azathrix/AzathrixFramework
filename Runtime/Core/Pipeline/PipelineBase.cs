@@ -339,7 +339,7 @@ namespace Azathrix.Framework.Core.Pipeline
                     }
                     catch (Exception e)
                     {
-                        Log.Error($"[{Id}] 阶段 {execution.PhaseId} 执行失败: {e}");
+                        Log.Exception(e);
                         context.Aborted = true;
                         break;
                     }

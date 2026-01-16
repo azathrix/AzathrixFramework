@@ -56,20 +56,20 @@ namespace Azathrix.Framework.Editor.Pipeline
             changed |= CleanupOrphanHooks(registry);
             var cleanupMs = watch.Elapsed.TotalMilliseconds;
 
-            var saveMs = 0d;
+            // var saveMs = 0d;
             if (changed)
             {
-                var saveWatch = Stopwatch.StartNew();
+                // var saveWatch = Stopwatch.StartNew();
                 EditorUtility.SetDirty(registry);
                 AssetDatabase.SaveAssets();
-                saveWatch.Stop();
-                saveMs = saveWatch.Elapsed.TotalMilliseconds;
+                // saveWatch.Stop();
+                // saveMs = saveWatch.Elapsed.TotalMilliseconds;
             }
 
-            watch.Stop();
-            Debug.Log($"[PipelineRegistry] 刷新完成，耗时 {watch.Elapsed.TotalMilliseconds:F2}ms，扫描程序集 {assemblies.Length} 个" +
-                      $" (Collect {collectMs:F2}ms, Normalize {normalizeMs - collectMs:F2}ms, Pipelines {pipelinesMs - normalizeMs:F2}ms," +
-                      $" Phases+Hooks {phasesHooksMs - pipelinesMs:F2}ms, Cleanup {cleanupMs - phasesHooksMs:F2}ms, Save {saveMs:F2}ms)");
+            // watch.Stop();
+            // Debug.Log($"[PipelineRegistry] 刷新完成，耗时 {watch.Elapsed.TotalMilliseconds:F2}ms，扫描程序集 {assemblies.Length} 个" +
+            //           $" (Collect {collectMs:F2}ms, Normalize {normalizeMs - collectMs:F2}ms, Pipelines {pipelinesMs - normalizeMs:F2}ms," +
+            //           $" Phases+Hooks {phasesHooksMs - pipelinesMs:F2}ms, Cleanup {cleanupMs - phasesHooksMs:F2}ms, Save {saveMs:F2}ms)");
         }
 
         private static bool CleanupEmptyTargets(PipelineRegistry registry)
