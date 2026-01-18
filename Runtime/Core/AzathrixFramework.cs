@@ -67,9 +67,16 @@ namespace Azathrix.Framework.Core
             IsSetup = false;
         }
 
-        internal static void SetEditorRuntimeManager(SystemRuntimeManager manager)
+        public static void SetEditorRuntimeManager(SystemRuntimeManager manager)
         {
             _editorRuntimeManager = manager;
+        }
+
+        public static void MarkEditorStarted()
+        {
+            IsApplicationStarted = true;
+            MarkSetup();
+            SetStarted(true);
         }
 #endif
 

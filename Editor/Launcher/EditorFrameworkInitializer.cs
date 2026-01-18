@@ -51,6 +51,7 @@ namespace Azathrix.Framework.Editor.Launcher
                 SilentMode = !settings.debugEditorPipeline
             };
 
+            _editorPipeline.SilentMode = context.SilentMode;
             await _editorPipeline.ExecuteAsync(context);
         }
 

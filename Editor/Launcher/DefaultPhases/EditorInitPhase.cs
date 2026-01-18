@@ -1,6 +1,6 @@
+using Azathrix.Framework.Core;
 using Azathrix.Framework.Core.Launcher;
 using Azathrix.Framework.Core.Pipeline;
-using Azathrix.Framework.Tools;
 using Cysharp.Threading.Tasks;
 
 namespace Azathrix.Framework.Editor.Launcher.DefaultPhases
@@ -16,7 +16,7 @@ namespace Azathrix.Framework.Editor.Launcher.DefaultPhases
 
         public UniTask ExecuteAsync(LauncherContext context)
         {
-            Log.Separator("编辑器初始化完成");
+            AzathrixFramework.MarkEditorStarted();
             return UniTask.CompletedTask;
         }
     }

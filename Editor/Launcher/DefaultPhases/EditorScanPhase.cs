@@ -1,6 +1,11 @@
+using System;
+using System.Linq;
+using Azathrix.Framework.Core;
 using Azathrix.Framework.Core.Launcher;
 using Azathrix.Framework.Core.Pipeline;
-using Azathrix.Framework.Tools;
+using Azathrix.Framework.Interfaces;
+using Azathrix.Framework.Interfaces.SystemEvents;
+using Azathrix.Framework.Registry;
 using Cysharp.Threading.Tasks;
 
 namespace Azathrix.Framework.Editor.Launcher.DefaultPhases
@@ -14,10 +19,25 @@ namespace Azathrix.Framework.Editor.Launcher.DefaultPhases
     {
         public int Order => 200;
 
-        public UniTask ExecuteAsync(LauncherContext context)
+        public async UniTask ExecuteAsync(LauncherContext context)
         {
-            Log.Separator("编辑器扫描");
-            return UniTask.CompletedTask;
+            var registry = SystemRegistry.Instance;
+            if (registry == null || registry.entries.Count == 0)
+            {
+                context.ScannedSystemTypes = Array.Empty<Type>();
+                return;
+            }
+
+            var types = registry.GetEnabledTypes()
+                .Where(t => t != null
+                            && typeof(ISystem).IsAssignableFrom(t)
+                            && typeof(ISystemEditorSupport).IsAssignableFrom(t)
+                            && !t.IsAbstract
+                            && !t.IsInterface)
+                .ToArray();
+
+            context.ScannedSystemTypes = types;
+            await UniTask.Yield();
         }
     }
 }

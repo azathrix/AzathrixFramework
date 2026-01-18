@@ -288,7 +288,8 @@ namespace Azathrix.Framework.Core.Pipeline
 
             if (_executions.Count == 0)
             {
-                Log.Warning($"[{Id}] 没有可执行的阶段");
+                if (!SilentMode)
+                    Log.Warning($"[{Id}] 没有可执行的阶段");
                 return;
             }
 
