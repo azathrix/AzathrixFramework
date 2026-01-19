@@ -15,6 +15,7 @@ namespace Azathrix.EventDispatcher.Tests.Tests.Editor
         public void Setup()
         {
             _dispatcher = new Framework.Events.Core.EventDispatcher();
+            _dispatcher.PostThreadSafe = true;  // 线程安全测试需要启用
         }
 
         [TearDown]

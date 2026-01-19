@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using Azathrix.Framework.Events.Internal;
 using Azathrix.Framework.Events.Serialization;
 
@@ -43,6 +44,79 @@ namespace Azathrix.Framework.Events.Core
     }
 
     /// <summary>
+    /// 消息队列接口
+    /// </summary>
+    internal interface IMessagePostQueue
+    {
+        int Count { get; }
+        void Enqueue(string messageId, object data, Type dataType);
+        void Flush(EventDispatcher dispatcher, MessageChannel channel);
+        void Clear();
+    }
+
+    /// <summary>
+    /// 线程安全的消息队列
+    /// </summary>
+    internal sealed class ThreadSafeMessageQueue : IMessagePostQueue
+    {
+        private readonly ConcurrentQueue<(string messageId, object data, Type dataType)> _queue = new();
+
+        public int Count => _queue.Count;
+
+        public void Enqueue(string messageId, object data, Type dataType)
+        {
+            _queue.Enqueue((messageId, data, dataType));
+        }
+
+        public void Flush(EventDispatcher dispatcher, MessageChannel channel)
+        {
+            while (_queue.TryDequeue(out var item))
+            {
+                var method = typeof(MessageChannel).GetMethod(nameof(MessageChannel.Dispatch));
+                var generic = method?.MakeGenericMethod(item.dataType);
+                generic?.Invoke(channel, new object[] { item.messageId, item.data });
+            }
+        }
+
+        public void Clear()
+        {
+            while (_queue.TryDequeue(out _)) { }
+        }
+    }
+
+    /// <summary>
+    /// 非线程安全的消息队列（零GC）
+    /// </summary>
+    internal sealed class FastMessageQueue : IMessagePostQueue
+    {
+        private readonly List<(string messageId, object data, Type dataType)> _queue = new(64);
+
+        public int Count => _queue.Count;
+
+        public void Enqueue(string messageId, object data, Type dataType)
+        {
+            _queue.Add((messageId, data, dataType));
+        }
+
+        public void Flush(EventDispatcher dispatcher, MessageChannel channel)
+        {
+            for (int i = 0; i < _queue.Count; i++)
+            {
+                var item = _queue[i];
+                var method = typeof(MessageChannel).GetMethod(nameof(MessageChannel.Dispatch));
+                var generic = method?.MakeGenericMethod(item.dataType);
+                generic?.Invoke(channel, new object[] { item.messageId, item.data });
+            }
+            _queue.Clear();
+        }
+
+        public void Clear()
+        {
+            _queue.Clear();
+        }
+    }
+
+    /// <summary>
     /// EventDispatcher - 消息事件相关方法
     /// </summary>
     /// <remarks>
@@ -54,7 +128,29 @@ namespace Azathrix.Framework.Events.Core
     public partial class EventDispatcher
     {
         private MessageChannel _messageChannel;
-        private readonly ConcurrentQueue<(string messageId, object data, Type dataType)> _pendingMessages = new();
+        private IMessagePostQueue _messagePostQueue;
+        private readonly object _msgQueueLock = new();
+
+        /// <summary>
+        /// PostMessage是否使用线程安全模式（默认true）
+        /// </summary>
+        /// <remarks>
+        /// 线程安全模式使用ConcurrentQueue，有少量GC开销。
+        /// 非线程安全模式使用List，零GC但只能在主线程调用PostMessage。
+        /// 必须在第一次PostMessage之前设置。
+        /// </remarks>
+        public bool MsgThreadSafe { get; set; } = true;
+
+        private IMessagePostQueue GetMessagePostQueue()
+        {
+            if (_messagePostQueue != null) return _messagePostQueue;
+            lock (_msgQueueLock)
+            {
+                return _messagePostQueue ??= MsgThreadSafe
+                    ? new ThreadSafeMessageQueue()
+                    : new FastMessageQueue();
+            }
+        }
 
         /// <summary>
         /// 设置消息序列化器
@@ -133,18 +229,18 @@ namespace Azathrix.Framework.Events.Core
         }
 
         /// <summary>
-        /// Post消息事件（延迟到帧结束处理，线程安全）
+        /// Post消息事件（延迟到帧结束处理）
         /// </summary>
         /// <typeparam name="T">消息数据类型</typeparam>
         /// <param name="messageId">消息ID</param>
         /// <param name="data">消息数据</param>
         /// <remarks>
         /// 消息会被加入队列，在帧结束时统一分发。
-        /// 适用于从子线程发送消息。
+        /// 线程安全性由MsgThreadSafe属性控制（默认true）。
         /// </remarks>
         public void PostMessage<T>(string messageId, T data)
         {
-            _pendingMessages.Enqueue((messageId, data, typeof(T)));
+            GetMessagePostQueue().Enqueue(messageId, data, typeof(T));
         }
 
         /// <summary>
@@ -152,13 +248,13 @@ namespace Azathrix.Framework.Events.Core
         /// </summary>
         public void FlushMessages()
         {
-            while (_pendingMessages.TryDequeue(out var item))
-            {
-                var method = typeof(MessageChannel).GetMethod(nameof(MessageChannel.Dispatch));
-                var generic = method?.MakeGenericMethod(item.dataType);
-                generic?.Invoke(GetMessageChannel(), new object[] { item.messageId, item.data });
-            }
+            _messagePostQueue?.Flush(this, GetMessageChannel());
         }
+
+        /// <summary>
+        /// 获取待处理的消息数量
+        /// </summary>
+        public int PendingMessageCount => _messagePostQueue?.Count ?? 0;
 
         /// <summary>
         /// 清空指定消息的所有订阅
@@ -181,7 +277,7 @@ namespace Azathrix.Framework.Events.Core
         /// </summary>
         public void ClearPendingMessages()
         {
-            while (_pendingMessages.TryDequeue(out _)) { }
+            _messagePostQueue?.Clear();
         }
     }
 }
