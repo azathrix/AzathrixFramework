@@ -420,7 +420,7 @@ namespace Azathrix.Framework.Tests
             pipeline.AddPhase(new ThrowingPhase(200));
             pipeline.AddPhase(new RecordingPhase("C", 300, log));
 
-            LogAssert.Expect(LogType.Error, new Regex(".*ThrowingPhase.*"));
+            LogAssert.Expect(LogType.Exception, new Regex(".*Test exception.*"));
 
             var context = new TestContext();
             await pipeline.ExecuteAsync(context);
