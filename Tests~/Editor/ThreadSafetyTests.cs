@@ -28,11 +28,10 @@ namespace Azathrix.EventDispatcher.Tests.Tests.Editor
         public void Post_From_Multiple_Threads()
         {
             int callCount = 0;
-            var lockObj = new object();
 
             _dispatcher.Subscribe<TestEvent>((ref TestEvent e) =>
             {
-                lock (lockObj) callCount++;
+                callCount++;  // 无需lock，Flush在主线程顺序执行
             });
 
             const int threadCount = 10;
@@ -54,7 +53,7 @@ namespace Azathrix.EventDispatcher.Tests.Tests.Editor
 
             Assert.AreEqual(threadCount * postsPerThread, _dispatcher.PendingPostCount);
 
-            _dispatcher.Flush();
+            _dispatcher.Flush();  // 主线程顺序执行所有handler
 
             Assert.AreEqual(threadCount * postsPerThread, callCount);
             Assert.AreEqual(0, _dispatcher.PendingPostCount);
@@ -64,11 +63,10 @@ namespace Azathrix.EventDispatcher.Tests.Tests.Editor
         public void PostMessage_From_Multiple_Threads()
         {
             int callCount = 0;
-            var lockObj = new object();
 
             _dispatcher.SubscribeMessage<string>("test.msg", data =>
             {
-                lock (lockObj) callCount++;
+                callCount++;  // 无需lock，FlushMessages在主线程顺序执行
             });
 
             const int threadCount = 10;
@@ -88,7 +86,7 @@ namespace Azathrix.EventDispatcher.Tests.Tests.Editor
 
             Task.WaitAll(tasks);
 
-            _dispatcher.FlushMessages();
+            _dispatcher.FlushMessages();  // 主线程顺序执行所有handler
 
             Assert.AreEqual(threadCount * postsPerThread, callCount);
         }
@@ -97,12 +95,11 @@ namespace Azathrix.EventDispatcher.Tests.Tests.Editor
         public void Concurrent_Post_And_Flush()
         {
             int callCount = 0;
-            var lockObj = new object();
             var running = true;
 
             _dispatcher.Subscribe<TestEvent>((ref TestEvent e) =>
             {
-                lock (lockObj) callCount++;
+                callCount++;  // 无需lock，Flush在主线程执行
             });
 
             // 后台线程持续 Post
@@ -135,19 +132,18 @@ namespace Azathrix.EventDispatcher.Tests.Tests.Editor
         public void Post_With_Different_Event_Types_From_Threads()
         {
             int countA = 0, countB = 0, countTest = 0;
-            var lockObj = new object();
 
             _dispatcher.Subscribe<TestEventA>((ref TestEventA e) =>
             {
-                lock (lockObj) countA++;
+                countA++;  // 无需lock
             });
             _dispatcher.Subscribe<TestEventB>((ref TestEventB e) =>
             {
-                lock (lockObj) countB++;
+                countB++;
             });
             _dispatcher.Subscribe<TestEvent>((ref TestEvent e) =>
             {
-                lock (lockObj) countTest++;
+                countTest++;
             });
 
             var tasks = new Task[3];
@@ -171,7 +167,7 @@ namespace Azathrix.EventDispatcher.Tests.Tests.Editor
             });
 
             Task.WaitAll(tasks);
-            _dispatcher.Flush();
+            _dispatcher.Flush();  // 主线程顺序执行
 
             Assert.AreEqual(100, countA);
             Assert.AreEqual(100, countB);
