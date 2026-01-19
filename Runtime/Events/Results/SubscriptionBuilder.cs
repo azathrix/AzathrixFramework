@@ -10,7 +10,33 @@ namespace Azathrix.Framework.Events.Results
     /// <summary>
     /// 订阅构建器，支持链式配置
     /// 订阅在创建时立即生效，链式方法修改行为
+    ///
+    /// <para><b>常用配置：</b></para>
+    /// <list type="bullet">
+    /// <item><see cref="Where"/> - 过滤条件</item>
+    /// <item><see cref="Priority"/> - 优先级（越大越先执行）</item>
+    /// <item><see cref="Once"/> - 只触发一次</item>
+    /// <item><see cref="Throttle"/> - 节流（限制触发频率）</item>
+    /// <item><see cref="Debounce"/> - 防抖（延迟执行，重复触发会重置计时）</item>
+    /// <item><see cref="Delay"/> - 延迟执行</item>
+    /// <item><see cref="Timeout"/> - 超时自动取消</item>
+    /// <item><see cref="Sticky"/> - 立即收到最后一个Sticky值</item>
+    /// <item><see cref="Skip"/> - 跳过前N个事件</item>
+    /// <item><see cref="AddTo(GameObject)"/> - 绑定到GameObject生命周期</item>
+    /// </list>
+    ///
+    /// <para><b>使用示例：</b></para>
+    /// <code>
+    /// dispatcher.Subscribe&lt;PlayerDamageEvent&gt;(ref evt => {
+    ///     Debug.Log($"受到 {evt.Damage} 点伤害");
+    /// })
+    /// .Where(ref evt => evt.Damage > 10)  // 只处理伤害大于10的
+    /// .Priority(100)                       // 高优先级
+    /// .Throttle(100)                       // 100ms内最多触发一次
+    /// .AddTo(gameObject);                  // GameObject销毁时自动取消订阅
+    /// </code>
     /// </summary>
+    /// <typeparam name="T">事件类型</typeparam>
     public sealed class SubscriptionBuilder<T> : IDisposable where T : struct
     {
         private readonly EventDispatcher _dispatcher;

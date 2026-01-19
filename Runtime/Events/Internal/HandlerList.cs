@@ -4,22 +4,34 @@ using System.Collections.Generic;
 namespace Azathrix.Framework.Events.Internal
 {
     /// <summary>
-    /// 订阅者信息
+    /// 订阅者信息（内部使用）
     /// </summary>
     internal struct Subscriber<T> where T : struct
     {
+        /// <summary>订阅ID</summary>
         public uint Id;
+        /// <summary>优先级（越大越先执行）</summary>
         public int Priority;
+        /// <summary>是否为一次性订阅</summary>
         public bool Once;
+        /// <summary>是否已被移除</summary>
         public bool Removed;
+        /// <summary>添加时的版本号（用于防止新订阅者在当前分发中被调用）</summary>
         public int Version;
+        /// <summary>事件处理器</summary>
         public Handlers.EventCallback<T> Handler;
     }
 
     /// <summary>
-    /// 高性能处理器列表
-    /// 支持在遍历时安全地添加/删除订阅者
+    /// 高性能处理器列表（内部使用）
     /// </summary>
+    /// <typeparam name="T">事件类型</typeparam>
+    /// <remarks>
+    /// 支持在遍历时安全地添加/删除订阅者：
+    /// - 分发期间的添加操作会延迟到分发结束后执行
+    /// - 分发期间的删除操作会立即标记为已删除，但实际清理延迟到分发结束
+    /// - 支持嵌套分发（事件处理器中再次分发事件）
+    /// </remarks>
     internal sealed class HandlerList<T> where T : struct
     {
         private Subscriber<T>[] _subscribers;

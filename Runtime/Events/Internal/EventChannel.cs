@@ -4,8 +4,13 @@ using Azathrix.Framework.Events.Interceptors;
 namespace Azathrix.Framework.Events.Internal
 {
     /// <summary>
-    /// 泛型事件通道（避免装箱）
+    /// 泛型事件通道（内部使用）
     /// </summary>
+    /// <typeparam name="T">事件类型</typeparam>
+    /// <remarks>
+    /// 每个事件类型对应一个通道，管理该类型的所有订阅者和拦截器。
+    /// 使用泛型避免装箱，提高性能。
+    /// </remarks>
     internal sealed class EventChannel<T> where T : struct
     {
         private readonly EventDispatcher _dispatcher;
