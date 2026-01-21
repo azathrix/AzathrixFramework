@@ -6,7 +6,6 @@ using System.Reflection;
 using Azathrix.Framework.Core.Attributes;
 using Azathrix.Framework.Interfaces;
 using Azathrix.Framework.Interfaces.SystemEvents;
-using Azathrix.Framework.Registry;
 using Azathrix.Framework.Tools;
 using Cysharp.Threading.Tasks;
 
@@ -30,22 +29,32 @@ namespace Azathrix.Framework.Core
     }
 
     /// <summary>
-    /// 游戏系统运行时 - 支持两种访问模式：
-    /// 1. 模块化模式：通过接口访问 GetSystem&lt;IXxxSystem&gt;()
-    /// 2. 集成模式：通过类直接访问 GetSystem&lt;XxxManager&gt;()
+    /// 游戏系统运行时管理器
+    /// 协调系统容器、依赖注入、依赖解析等组件，管理系统的完整生命周期
     /// </summary>
     public class SystemRuntimeManager
     {
-        // 所有已注册的系统实例
-        private readonly List<ISystem> _systems = new();
+        #region 组件
 
-        // 类型 -> 实例 (支持接口和具体类两种方式访问)
-        private readonly Dictionary<Type, ISystem> _typeToInstance = new();
+        /// <summary>
+        /// 系统容器 - 负责系统存储和访问
+        /// </summary>
+        private readonly SystemContainer _container = new();
 
-        // 已初始化的系统
-        private readonly HashSet<ISystem> _initializedSystems = new();
+        /// <summary>
+        /// 依赖注入器 - 负责依赖注入
+        /// </summary>
+        private readonly DependencyInjector _injector;
 
-        // 生命周期事件列表
+        /// <summary>
+        /// 依赖解析器 - 负责拓扑排序和接口选择
+        /// </summary>
+        private readonly DependencyResolver _resolver = new();
+
+        #endregion
+
+        #region 生命周期事件列表
+
         private readonly List<ISystemUpdate> _updateList = new();
         private readonly List<ISystemFixedUpdate> _fixedUpdateList = new();
         private readonly List<ISystemLateUpdate> _lateUpdateList = new();
@@ -55,32 +64,34 @@ namespace Azathrix.Framework.Core
         private readonly List<ISystemRegister> _registerList = new();
         private readonly List<ISystemInitialize> _initAsyncList = new();
 
-        // 性能统计
+        #endregion
+
+        #region 性能统计
+
         private readonly Dictionary<ISystem, PerformanceData> _performanceData = new();
         private readonly Stopwatch _stopwatch = new();
 
-        // 系统别名映射
-        private readonly Dictionary<string, ISystem> _aliasToInstance = new();
+        #endregion
 
-        // Update 间隔控制
+        #region Update 间隔控制
+
         private readonly Dictionary<ISystem, UpdateIntervalData> _updateIntervals = new();
         private int _frameCount;
 
-        // 系统元数据缓存（避免重复反射）
+        #endregion
+
+        #region 元数据缓存
+
         private readonly Dictionary<Type, SystemMetadata> _metadataCache = new();
 
-        // 注入信息缓存
-        private readonly Dictionary<Type, InjectionInfo> _injectionCache = new();
+        #endregion
+
+        #region 属性
 
         /// <summary>
         /// Runtime 是否暂停
         /// </summary>
         public bool IsPaused { get; private set; }
-
-        // 系统事件
-        public event Action<ISystem> OnSystemRegistered;
-        public event Action<ISystem> OnSystemUnregistered;
-        public event Action<ISystem, bool> OnSystemEnabledChanged;
 
         /// <summary>
         /// 是否启用性能统计
@@ -90,17 +101,69 @@ namespace Azathrix.Framework.Core
         /// <summary>
         /// 是否为编辑器模式（跳过运行时生命周期）
         /// </summary>
-        public bool IsEditorMode { get; set; }
-
-        public SystemRuntimeManager()
+        public bool IsEditorMode
         {
+            get => _isEditorMode;
+            set
+            {
+                _isEditorMode = value;
+                _injector.IsEditorMode = value;
+                _resolver.IsEditorMode = value;
+            }
+        }
+        private bool _isEditorMode;
+
+        #endregion
+
+        #region 事件
+
+        /// <summary>
+        /// 系统注册时触发
+        /// </summary>
+        public event Action<ISystem> OnSystemRegistered
+        {
+            add => _container.OnSystemRegistered += value;
+            remove => _container.OnSystemRegistered -= value;
         }
 
         /// <summary>
-        /// 获取系统名称（从缓存或 SystemAliasAttribute）
+        /// 系统注销时触发
+        /// </summary>
+        public event Action<ISystem> OnSystemUnregistered
+        {
+            add => _container.OnSystemUnregistered += value;
+            remove => _container.OnSystemUnregistered -= value;
+        }
+
+        /// <summary>
+        /// 系统启用状态变化时触发
+        /// </summary>
+        public event Action<ISystem, bool> OnSystemEnabledChanged
+        {
+            add => _container.OnSystemEnabledChanged += value;
+            remove => _container.OnSystemEnabledChanged -= value;
+        }
+
+        #endregion
+
+        /// <summary>
+        /// 创建系统运行时管理器
+        /// </summary>
+        public SystemRuntimeManager()
+        {
+            _injector = new DependencyInjector(_container);
+        }
+
+        #region 系统访问
+
+        /// <summary>
+        /// 获取系统名称
         /// </summary>
         public string GetSystemName(ISystem system) => GetSystemName(system.GetType());
 
+        /// <summary>
+        /// 获取系统名称（通过类型）
+        /// </summary>
         public string GetSystemName(Type type)
         {
             var meta = GetOrCreateMetadata(type);
@@ -108,54 +171,39 @@ namespace Azathrix.Framework.Core
         }
 
         /// <summary>
-        /// 获取系统优先级（从缓存或 SystemPriorityAttribute）
+        /// 获取系统优先级
         /// </summary>
         public int GetSystemPriority(ISystem system) => GetSystemPriority(system.GetType());
 
-        public int GetSystemPriority(Type type)
-        {
-            return GetOrCreateMetadata(type).Priority;
-        }
-
-
-        #region 系统访问
+        /// <summary>
+        /// 获取系统优先级（通过类型）
+        /// </summary>
+        public int GetSystemPriority(Type type) => GetOrCreateMetadata(type).Priority;
 
         /// <summary>
         /// 获取系统 - 支持接口或具体类
         /// </summary>
-        public T GetSystem<T>() where T : class, ISystem
-        {
-            return _typeToInstance.TryGetValue(typeof(T), out var system) ? system as T : null;
-        }
+        public T GetSystem<T>() where T : class, ISystem => _container.GetSystem<T>();
 
         /// <summary>
         /// 检查系统是否存在
         /// </summary>
-        public bool HasSystem<T>() where T : class, ISystem
-        {
-            return _typeToInstance.ContainsKey(typeof(T));
-        }
+        public bool HasSystem<T>() where T : class, ISystem => _container.HasSystem<T>();
 
         /// <summary>
-        /// 获取所有已注册的系统（调试用）
+        /// 获取所有已注册的系统
         /// </summary>
-        public IReadOnlyList<ISystem> GetAllSystems() => _systems;
+        public IReadOnlyList<ISystem> GetAllSystems() => _container.Systems;
 
         /// <summary>
         /// 通过别名获取系统
         /// </summary>
-        public ISystem GetSystemByAlias(string alias)
-        {
-            return _aliasToInstance.TryGetValue(alias, out var system) ? system : null;
-        }
+        public ISystem GetSystemByAlias(string alias) => _container.GetSystemByAlias(alias);
 
         /// <summary>
         /// 通过别名获取系统（泛型版本）
         /// </summary>
-        public T GetSystemByAlias<T>(string alias) where T : class, ISystem
-        {
-            return GetSystemByAlias(alias) as T;
-        }
+        public T GetSystemByAlias<T>(string alias) where T : class, ISystem => _container.GetSystemByAlias<T>(alias);
 
         /// <summary>
         /// 获取系统状态信息
@@ -173,7 +221,7 @@ namespace Azathrix.Framework.Core
                 Alias = type.GetCustomAttribute<SystemAliasAttribute>()?.Alias,
                 Type = type,
                 IsEnabled = system is not ISystemEnabled {Enabled: false},
-                IsInitialized = _initializedSystems.Contains(system),
+                IsInitialized = _container.IsInitialized(system),
                 Priority = GetSystemPriority(type),
                 LastUpdateMs = perf?.LastMs ?? 0,
                 AverageUpdateMs = perf?.AverageMs ?? 0
@@ -185,7 +233,7 @@ namespace Azathrix.Framework.Core
         /// </summary>
         public List<SystemStatus> GetAllSystemStatus()
         {
-            return _systems.Select(sys =>
+            return _container.Systems.Select(sys =>
             {
                 var perf = _performanceData.GetValueOrDefault(sys);
                 var type = sys.GetType();
@@ -196,7 +244,7 @@ namespace Azathrix.Framework.Core
                     Alias = meta.Alias,
                     Type = type,
                     IsEnabled = sys is not ISystemEnabled {Enabled: false},
-                    IsInitialized = _initializedSystems.Contains(sys),
+                    IsInitialized = _container.IsInitialized(sys),
                     Priority = meta.Priority,
                     LastUpdateMs = perf?.LastMs ?? 0,
                     AverageUpdateMs = perf?.AverageMs ?? 0,
@@ -211,7 +259,7 @@ namespace Azathrix.Framework.Core
         #region Runtime 控制
 
         /// <summary>
-        /// 暂停 Runtime（停止所有 Update/FixedUpdate/LateUpdate）
+        /// 暂停 Runtime
         /// </summary>
         public void Pause() => IsPaused = true;
 
@@ -232,97 +280,19 @@ namespace Azathrix.Framework.Core
             if (!IsEditorMode)
                 Log.Info($"[Register] 开始处理 {systemTypes.Length} 个系统类型");
 
-            // 对全量系统进行拓扑排序
-            var sortedTypes = TopologicalSort(systemTypes);
-
-            // 预处理：收集系统信息
-            var defaultTypes = new HashSet<Type>();
-            var interfaceToImplementations = new Dictionary<Type, List<Type>>();
-            foreach (var type in sortedTypes)
-            {
-                if (type.GetCustomAttribute<DefaultAttribute>() != null)
-                    defaultTypes.Add(type);
-
-                foreach (var iface in type.GetInterfaces())
-                {
-                    if (iface != typeof(ISystem) && typeof(ISystem).IsAssignableFrom(iface))
-                    {
-                        if (!interfaceToImplementations.ContainsKey(iface))
-                            interfaceToImplementations[iface] = new List<Type>();
-                        interfaceToImplementations[iface].Add(type);
-                    }
-                }
-            }
-
-            // 确定每个接口应该使用哪个实现
-            // 优先级：SystemRegistry 配置 > 非默认 > 默认
-            // 注意：如果接口被禁用或选定实现被禁用，则不注册该接口
-            var settings = SystemRegistry.Instance;
-            var interfaceToSelectedImpl = new Dictionary<Type, Type>();
-            foreach (var (iface, implementations) in interfaceToImplementations)
-            {
-                // 检查接口是否被禁用
-                if (settings != null && !settings.IsInterfaceEnabled(iface.FullName))
-                    continue;
-
-                Type selected = null;
-
-                // 1. 检查 SystemRegistry 配置
-                var selectedImplName = settings?.GetSelectedImplementation(iface.FullName);
-                if (!string.IsNullOrEmpty(selectedImplName))
-                {
-                    // 检查配置的实现是否被禁用
-                    if (settings.IsSystemDisabled(selectedImplName))
-                    {
-                        if (!IsEditorMode)
-                            Log.Warning($"[Register] 接口 {iface.Name} 的配置实现 {selectedImplName.Split('.').Last()} 已禁用，跳过注册");
-                        continue;
-                    }
-
-                    selected = implementations.FirstOrDefault(t => t.FullName == selectedImplName);
-                    if (selected == null)
-                    {
-                        if (!IsEditorMode)
-                            Log.Warning($"[Register] 接口 {iface.Name} 的配置实现 {selectedImplName.Split('.').Last()} 已丢失，跳过注册");
-                        continue;
-                    }
-                }
-
-                // 2. 如果没有配置，选择第一个未禁用的非默认实现
-                if (selected == null)
-                {
-                    selected = implementations.FirstOrDefault(t =>
-                        !defaultTypes.Contains(t) &&
-                        (settings == null || !settings.IsSystemDisabled(t.FullName)));
-                }
-
-                // 3. 如果没有非默认实现，选择第一个未禁用的默认实现
-                if (selected == null)
-                {
-                    selected = implementations.FirstOrDefault(t =>
-                        settings == null || !settings.IsSystemDisabled(t.FullName));
-                }
-
-                if (selected != null)
-                    interfaceToSelectedImpl[iface] = selected;
-            }
-
-            if (!IsEditorMode)
-                Log.Info($"[Register] 非默认系统: {sortedTypes.Length - defaultTypes.Count} 个，默认系统: {defaultTypes.Count} 个");
+            // 解析依赖关系
+            var result = _resolver.Resolve(systemTypes);
 
             // 按拓扑排序顺序注册
-            foreach (var type in sortedTypes)
+            foreach (var type in result.SortedTypes)
             {
                 try
                 {
-                    // 检查该系统是否被任何接口选中
-                    bool isSelected = interfaceToSelectedImpl.Values.Contains(type);
-
-                    // 默认系统只有被选中才注册
-                    if (defaultTypes.Contains(type) && !isSelected)
+                    bool isSelected = result.InterfaceToSelectedImpl.Values.Contains(type);
+                    if (result.DefaultTypes.Contains(type) && !isSelected)
                         continue;
 
-                    Register(type, interfaceToSelectedImpl);
+                    Register(type, result.InterfaceToSelectedImpl);
                 }
                 catch (Exception e)
                 {
@@ -331,8 +301,9 @@ namespace Azathrix.Framework.Core
             }
 
             // 依赖注入
-            InjectDependencies();
+            _injector.InjectAll();
 
+            // 排序
             SortByPriority();
 
             // 调用生命周期
@@ -340,15 +311,7 @@ namespace Azathrix.Framework.Core
             await InvokeInitializeAsync();
 
             if (!IsEditorMode)
-                Log.Info($"[Register] 系统注册完成，共 {_systems.Count} 个系统");
-        }
-
-        /// <summary>
-        /// 同步版本（不等待异步初始化）
-        /// </summary>
-        public void CreateSystemFromTypes(Type[] systemTypes)
-        {
-            CreateSystemFromTypesAsync(systemTypes).Forget();
+                Log.Info($"[Register] 系统注册完成，共 {_container.Systems.Count} 个系统");
         }
 
         /// <summary>
@@ -356,44 +319,7 @@ namespace Azathrix.Framework.Core
         /// </summary>
         public async UniTask RegisterSystemAsync<T>() where T : class, ISystem, new()
         {
-            var type = typeof(T);
-
-            // 已注册则跳过
-            if (_typeToInstance.ContainsKey(type))
-            {
-                Log.Info($"系统 {type.Name} 已注册，跳过");
-                return;
-            }
-
-            Register(type);
-            InjectDependencies(_typeToInstance[type]);
-            SortByPriority();
-
-            if (_typeToInstance[type] is ISystemRegister reg)
-            {
-                try
-                {
-                    reg.OnRegister();
-                }
-                catch (Exception e)
-                {
-                    Log.Exception(e);
-                }
-            }
-
-            if (_typeToInstance[type] is ISystemInitialize init)
-            {
-                try
-                {
-                    await init.OnInitializeAsync();
-                }
-                catch (Exception e)
-                {
-                    Log.Exception(e);
-                }
-            }
-
-            _initializedSystems.Add(_typeToInstance[type]);
+            await RegisterSystemAsync(typeof(T));
         }
 
         /// <summary>
@@ -409,41 +335,31 @@ namespace Azathrix.Framework.Core
         /// </summary>
         public async UniTask RegisterSystemAsync(Type type)
         {
-            if (_typeToInstance.ContainsKey(type))
+            if (_container.HasSystem(type))
             {
                 Log.Info($"系统 {type.Name} 已注册，跳过");
                 return;
             }
 
             Register(type);
-            InjectDependencies(_typeToInstance[type]);
+            _injector.InjectTo(_container.TypeToInstance[type]);
             SortByPriority();
 
-            if (_typeToInstance[type] is ISystemRegister reg)
+            var system = _container.TypeToInstance[type];
+
+            if (system is ISystemRegister reg)
             {
-                try
-                {
-                    reg.OnRegister();
-                }
-                catch (Exception e)
-                {
-                    Log.Exception(e);
-                }
+                try { reg.OnRegister(); }
+                catch (Exception e) { Log.Exception(e); }
             }
 
-            if (_typeToInstance[type] is ISystemInitialize init)
+            if (system is ISystemInitialize init)
             {
-                try
-                {
-                    await init.OnInitializeAsync();
-                }
-                catch (Exception e)
-                {
-                    Log.Exception(e);
-                }
+                try { await init.OnInitializeAsync(); }
+                catch (Exception e) { Log.Exception(e); }
             }
 
-            _initializedSystems.Add(_typeToInstance[type]);
+            _container.MarkInitialized(system);
         }
 
         /// <summary>
@@ -451,36 +367,31 @@ namespace Azathrix.Framework.Core
         /// </summary>
         private void Register(Type type, Dictionary<Type, Type> interfaceToSelectedImpl = null)
         {
-            if (_typeToInstance.ContainsKey(type))
+            if (_container.HasSystem(type))
                 return;
 
             var system = Activator.CreateInstance(type) as ISystem
                          ?? throw new Exception($"创建系统实例失败: {type}");
 
-            _systems.Add(system);
+            _container.Add(system, type);
             _performanceData[system] = new PerformanceData();
 
-            // 注册具体类类型
-            _typeToInstance[type] = system;
-
-            // 注册所有实现的 IGameSystem 派生接口
+            // 注册接口映射
             var registeredInterfaces = new List<string>();
             foreach (var iface in type.GetInterfaces())
             {
                 if (iface != typeof(ISystem) && typeof(ISystem).IsAssignableFrom(iface))
                 {
-                    // 如果接口已被注册，跳过
-                    if (_typeToInstance.ContainsKey(iface))
+                    if (_container.HasSystem(iface))
                         continue;
 
-                    // 如果有预选映射，检查当前类型是否是该接口的选定实现
                     if (interfaceToSelectedImpl != null)
                     {
                         if (interfaceToSelectedImpl.TryGetValue(iface, out var selected) && selected != type)
                             continue;
                     }
 
-                    _typeToInstance[iface] = system;
+                    _container.RegisterInterface(iface, system);
                     registeredInterfaces.Add(iface.Name);
                 }
             }
@@ -495,10 +406,9 @@ namespace Azathrix.Framework.Core
             TryAddEvent(system, _registerList);
             TryAddEvent(system, _initAsyncList);
 
-            // 使用缓存的元数据注册别名和 Update 间隔
+            // 注册别名和 Update 间隔
             var meta = GetOrCreateMetadata(type);
-            if (!string.IsNullOrEmpty(meta.Alias))
-                _aliasToInstance[meta.Alias] = system;
+            _container.RegisterAlias(meta.Alias, system);
 
             if (meta.UpdateInterval > 1)
                 _updateIntervals[system] = new UpdateIntervalData(meta.UpdateInterval);
@@ -510,48 +420,31 @@ namespace Azathrix.Framework.Core
                 var interfaces = registeredInterfaces.Count > 0 ? $" → {string.Join(", ", registeredInterfaces)}" : "";
                 Log.Info($"[Register]   + {systemName}{priority}{interfaces}");
             }
-            OnSystemRegistered?.Invoke(system);
+
+            _container.RaiseSystemRegistered(system);
         }
 
         /// <summary>
         /// 注销系统
         /// </summary>
-        public void UnRegister<T>() where T : class, ISystem
-        {
-            UnRegister(typeof(T));
-        }
+        public void UnRegister<T>() where T : class, ISystem => UnRegister(typeof(T));
 
         /// <summary>
         /// 注销系统（通过类型）
         /// </summary>
         public void UnRegister(Type type)
         {
-            if (!_typeToInstance.TryGetValue(type, out var system))
+            if (!_container.TypeToInstance.TryGetValue(type, out var system))
                 return;
 
-            // 触发注销事件
             if (system is ISystemRegister reg)
             {
-                try
-                {
-                    reg.OnUnRegister();
-                }
-                catch (Exception e)
-                {
-                    Log.Exception(e);
-                }
+                try { reg.OnUnRegister(); }
+                catch (Exception e) { Log.Exception(e); }
             }
 
-            _systems.Remove(system);
-            _initializedSystems.Remove(system);
             _performanceData.Remove(system);
 
-            // 移除所有指向该实例的类型映射
-            var keysToRemove = _typeToInstance.Where(kv => kv.Value == system).Select(kv => kv.Key).ToList();
-            foreach (var key in keysToRemove)
-                _typeToInstance.Remove(key);
-
-            // 移除生命周期事件
             TryRemoveEvent(system, _updateList);
             TryRemoveEvent(system, _fixedUpdateList);
             TryRemoveEvent(system, _lateUpdateList);
@@ -561,17 +454,13 @@ namespace Azathrix.Framework.Core
             TryRemoveEvent(system, _registerList);
             TryRemoveEvent(system, _initAsyncList);
 
-            // 移除别名
-            var aliasToRemove = _aliasToInstance.Where(kv => kv.Value == system).Select(kv => kv.Key).ToList();
-            foreach (var alias in aliasToRemove)
-                _aliasToInstance.Remove(alias);
-
-            // 移除 Update 间隔
             _updateIntervals.Remove(system);
+            _container.Remove(system);
 
             if (!IsEditorMode)
                 Log.Info($"[Register] 注销系统: {GetSystemName(system)}");
-            OnSystemUnregistered?.Invoke(system);
+
+            _container.RaiseSystemUnregistered(system);
         }
 
         /// <summary>
@@ -588,7 +477,7 @@ namespace Azathrix.Framework.Core
         /// </summary>
         public void SetSystemEnabled(Type type, bool enabled)
         {
-            if (_typeToInstance.TryGetValue(type, out var system))
+            if (_container.TypeToInstance.TryGetValue(type, out var system))
                 SetSystemEnabledInternal(system, enabled);
         }
 
@@ -599,16 +488,25 @@ namespace Azathrix.Framework.Core
                 var oldEnabled = sys.Enabled;
                 sys.Enabled = enabled;
                 if (oldEnabled != enabled)
-                    OnSystemEnabledChanged?.Invoke(system, enabled);
+                    _container.RaiseSystemEnabledChanged(system, enabled);
             }
         }
+
+        #endregion
+
+        #region 依赖注入
+
+        /// <summary>
+        /// 向任意对象注入依赖
+        /// </summary>
+        public void InjectTo(object target) => _injector.InjectTo(target);
 
         #endregion
 
         #region 生命周期调用
 
         /// <summary>
-        /// 每帧更新所有实现 IUpdate 的系统
+        /// 每帧更新
         /// </summary>
         public void Update(float deltaTime)
         {
@@ -620,7 +518,6 @@ namespace Azathrix.Framework.Core
             {
                 if (sys is ISystemEnabled {Enabled: false}) continue;
 
-                // 检查 Update 间隔
                 var gameSystem = (ISystem) sys;
                 if (_updateIntervals.TryGetValue(gameSystem, out var intervalData))
                 {
@@ -650,7 +547,7 @@ namespace Azathrix.Framework.Core
         }
 
         /// <summary>
-        /// 固定时间步更新所有实现 IFixedUpdate 的系统
+        /// 固定时间步更新
         /// </summary>
         public void FixedUpdate(float deltaTime)
         {
@@ -659,7 +556,7 @@ namespace Azathrix.Framework.Core
         }
 
         /// <summary>
-        /// 延迟更新所有实现 ILateUpdate 的系统
+        /// 延迟更新
         /// </summary>
         public void LateUpdate(float deltaTime)
         {
@@ -668,26 +565,23 @@ namespace Azathrix.Framework.Core
         }
 
         /// <summary>
-        /// 应用退出时调用
+        /// 应用退出
         /// </summary>
         public void OnApplicationQuit() =>
             InvokeLifecycle(_quitList, sys => sys.OnApplicationQuit(), checkEnabled: false);
 
         /// <summary>
-        /// 应用焦点变化时调用
+        /// 应用焦点变化
         /// </summary>
         public void OnApplicationFocus(bool focus) =>
             InvokeLifecycle(_focusList, sys => sys.OnApplicationFocus(focus), checkEnabled: false);
 
         /// <summary>
-        /// 应用暂停时调用
+        /// 应用暂停
         /// </summary>
         public void OnApplicationPause(bool pause) =>
             InvokeLifecycle(_pauseList, sys => sys.OnApplicationPause(pause), checkEnabled: false);
 
-        /// <summary>
-        /// 调用生命周期事件
-        /// </summary>
         private void InvokeLifecycle<T>(List<T> list, Action<T> action, bool checkEnabled = true)
         {
             foreach (var sys in list)
@@ -698,38 +592,22 @@ namespace Azathrix.Framework.Core
             }
         }
 
-        #endregion
-
-        #region 私有方法
-
-        /// <summary>
-        /// 调用所有系统的注册回调
-        /// </summary>
         private void InvokeRegister()
         {
             if (IsEditorMode) return;
             foreach (var sys in _registerList)
             {
-                try
-                {
-                    sys.OnRegister();
-                }
-                catch (Exception e)
-                {
-                    Log.Exception(e);
-                }
+                try { sys.OnRegister(); }
+                catch (Exception e) { Log.Exception(e); }
             }
         }
 
-        /// <summary>
-        /// 异步初始化所有实现 IInitializeAsync 的系统
-        /// </summary>
         private async UniTask InvokeInitializeAsync()
         {
             if (IsEditorMode)
             {
-                foreach (var sys in _systems)
-                    _initializedSystems.Add(sys);
+                foreach (var sys in _container.Systems)
+                    _container.MarkInitialized(sys);
                 return;
             }
 
@@ -738,7 +616,7 @@ namespace Azathrix.Framework.Core
                 try
                 {
                     await sys.OnInitializeAsync();
-                    _initializedSystems.Add((ISystem) sys);
+                    _container.MarkInitialized((ISystem) sys);
                 }
                 catch (Exception e)
                 {
@@ -746,37 +624,31 @@ namespace Azathrix.Framework.Core
                 }
             }
 
-            // 标记所有系统为已初始化
-            foreach (var sys in _systems)
-                _initializedSystems.Add(sys);
+            foreach (var sys in _container.Systems)
+                _container.MarkInitialized(sys);
         }
 
-        /// <summary>
-        /// 尝试将系统添加到生命周期事件列表
-        /// </summary>
+        #endregion
+
+        #region 私有方法
+
         private void TryAddEvent<T>(ISystem system, List<T> list) where T : class
         {
             if (system is T evt)
                 list.Add(evt);
         }
 
-        /// <summary>
-        /// 尝试从生命周期事件列表移除系统
-        /// </summary>
         private void TryRemoveEvent<T>(ISystem system, List<T> list) where T : class
         {
             if (system is T evt)
                 list.Remove(evt);
         }
 
-        /// <summary>
-        /// 按优先级排序所有系统列表
-        /// </summary>
         private void SortByPriority()
         {
             int Compare(ISystem a, ISystem b) => GetSystemPriority(a).CompareTo(GetSystemPriority(b));
 
-            _systems.Sort(Compare);
+            _container.Sort(Compare);
             _updateList.Sort((a, b) => Compare((ISystem) a, (ISystem) b));
             _fixedUpdateList.Sort((a, b) => Compare((ISystem) a, (ISystem) b));
             _lateUpdateList.Sort((a, b) => Compare((ISystem) a, (ISystem) b));
@@ -789,179 +661,34 @@ namespace Azathrix.Framework.Core
 
         #endregion
 
-        #region 依赖排序
+        #region 元数据缓存
 
-        /// <summary>
-        /// 拓扑排序处理系统依赖关系
-        /// </summary>
-        private Type[] TopologicalSort(Type[] types)
+        private class SystemMetadata
         {
-            var typeSet = new HashSet<Type>(types);
-            var result = new List<Type>();
-            var visited = new HashSet<Type>();
-            var visiting = new HashSet<Type>();
-            var disabled = new HashSet<Type>();
-
-            foreach (var type in types)
-            {
-                if (!visited.Contains(type) && !disabled.Contains(type))
-                    Visit(type, typeSet, visited, visiting, result, disabled);
-            }
-
-            return result.ToArray();
+            public string Name;
+            public string Alias;
+            public int Priority;
+            public int UpdateInterval;
         }
 
-        private void Visit(Type type, HashSet<Type> typeSet, HashSet<Type> visited, HashSet<Type> visiting,
-            List<Type> result, HashSet<Type> disabled)
+        private SystemMetadata GetOrCreateMetadata(Type type)
         {
-            if (visited.Contains(type) || disabled.Contains(type)) return;
-            if (visiting.Contains(type))
-                throw new Exception($"循环依赖检测: {type.Name}");
+            if (_metadataCache.TryGetValue(type, out var meta))
+                return meta;
 
-            visiting.Add(type);
+            var aliasAttr = type.GetCustomAttribute<SystemAliasAttribute>();
+            var priorityAttr = type.GetCustomAttribute<SystemPriorityAttribute>();
+            var intervalAttr = type.GetCustomAttribute<UpdateIntervalAttribute>();
 
-            var deps = type.GetCustomAttributes<RequireSystemAttribute>();
-            var settings = SystemRegistry.Instance;
-
-            foreach (var dep in deps)
+            meta = new SystemMetadata
             {
-                // 找到实现该接口的类型，优先使用 SystemRegistry 中指定的实现
-                Type depType = null;
-                if (dep.DependencyType.IsInterface)
-                {
-                    // 检查接口是否被禁用
-                    if (settings != null && !settings.IsInterfaceEnabled(dep.DependencyType.FullName))
-                    {
-                        Log.Warning($"[Register] 系统 {type.Name} 依赖的接口 {dep.DependencyType.Name} 已禁用，{type.Name} 也已禁用");
-                        visiting.Remove(type);
-                        disabled.Add(type);
-                        return;
-                    }
-
-                    var selectedImpl = settings?.GetSelectedImplementation(dep.DependencyType.FullName);
-                    if (!string.IsNullOrEmpty(selectedImpl))
-                    {
-                        // 检查选中的实现是否被禁用
-                        if (settings.IsSystemDisabled(selectedImpl))
-                        {
-                            Log.Warning($"[Register] 系统 {type.Name} 依赖的接口 {dep.DependencyType.Name} 实现 {selectedImpl.Split('.').Last()} 已禁用，{type.Name} 也已禁用");
-                            visiting.Remove(type);
-                            disabled.Add(type);
-                            return;
-                        }
-                        depType = typeSet.FirstOrDefault(t => t.FullName == selectedImpl);
-                    }
-                }
-                depType ??= typeSet.FirstOrDefault(t =>
-                    dep.DependencyType.IsAssignableFrom(t) || t == dep.DependencyType);
-
-                if (depType != null)
-                {
-                    // 检查依赖是否在注册表中被禁用
-                    if (settings != null && settings.IsSystemDisabled(depType.FullName))
-                    {
-                        Log.Warning($"系统 {type.Name} 依赖 {depType.Name} 在注册表中已禁用，{type.Name} 也已禁用");
-                        visiting.Remove(type);
-                        disabled.Add(type);
-                        return;
-                    }
-
-                    Visit(depType, typeSet, visited, visiting, result, disabled);
-                    // 依赖被禁用，当前系统也禁用
-                    if (disabled.Contains(depType))
-                    {
-                        Log.Warning($"系统 {type.Name} 依赖 {depType.Name} 已被禁用，{type.Name} 也已禁用");
-                        visiting.Remove(type);
-                        disabled.Add(type);
-                        return;
-                    }
-                }
-                else
-                {
-                    // 依赖不存在，检查是否是因为被禁用
-                    var depTypeName = dep.DependencyType.FullName;
-                    if (settings != null && settings.IsSystemDisabled(depTypeName))
-                    {
-                        Log.Warning($"[Register] 系统 {type.Name} 依赖 {dep.DependencyType.Name} 已禁用，{type.Name} 也已禁用");
-                    }
-                    else
-                    {
-                        Log.Warning($"[Register] 系统 {type.Name} 依赖 {dep.DependencyType.Name} 不存在，{type.Name} 已禁用");
-                    }
-                    visiting.Remove(type);
-                    disabled.Add(type);
-                    return;
-                }
-            }
-
-            visiting.Remove(type);
-            visited.Add(type);
-            result.Add(type);
-        }
-
-        #endregion
-
-        #region 依赖注入
-
-        /// <summary>
-        /// 为所有已注册系统执行依赖注入
-        /// </summary>
-        private void InjectDependencies()
-        {
-            foreach (var system in _systems)
-                InjectDependencies(system);
-        }
-
-        /// <summary>
-        /// 为单个系统执行依赖注入
-        /// </summary>
-        private void InjectDependencies(ISystem system)
-        {
-            InjectTo(system);
-        }
-
-        /// <summary>
-        /// 向任意对象注入依赖（使用缓存的注入信息）
-        /// </summary>
-        /// <param name="target">目标对象</param>
-        public void InjectTo(object target)
-        {
-            if (target == null) return;
-
-            var type = target.GetType();
-            var info = GetOrCreateInjectionInfo(type);
-            var injectedCount = 0;
-
-            // 注入字段
-            foreach (var (field, isWeak) in info.Fields)
-            {
-                if (_typeToInstance.TryGetValue(field.FieldType, out var dep))
-                {
-                    field.SetValue(target, dep);
-                    injectedCount++;
-                }
-                else if (!isWeak)
-                {
-                    Log.Warning($"[Inject] {type.Name}.{field.Name}: 未找到 {field.FieldType.Name}");
-                }
-            }
-
-            // 注入属性
-            foreach (var (prop, isWeak) in info.Properties)
-            {
-                if (_typeToInstance.TryGetValue(prop.PropertyType, out var dep))
-                {
-                    prop.SetValue(target, dep);
-                    injectedCount++;
-                }
-                else if (!isWeak)
-                {
-                    Log.Warning($"[Inject] {type.Name}.{prop.Name}: 未找到 {prop.PropertyType.Name}");
-                }
-            }
-
-            if (injectedCount > 0 && !IsEditorMode)
-                Log.Info($"[Inject] {type.Name}: 注入 {injectedCount} 个依赖");
+                Name = type.Name,
+                Alias = aliasAttr?.Alias,
+                Priority = priorityAttr?.Priority ?? 0,
+                UpdateInterval = intervalAttr?.FrameInterval ?? 0
+            };
+            _metadataCache[type] = meta;
+            return meta;
         }
 
         #endregion
@@ -999,10 +726,7 @@ namespace Azathrix.Framework.Core
             public int Interval { get; }
             private int _lastUpdateFrame;
 
-            public UpdateIntervalData(int interval)
-            {
-                Interval = interval;
-            }
+            public UpdateIntervalData(int interval) => Interval = interval;
 
             public bool ShouldUpdate(int currentFrame)
             {
@@ -1011,76 +735,8 @@ namespace Azathrix.Framework.Core
                     _lastUpdateFrame = currentFrame;
                     return true;
                 }
-
                 return false;
             }
-        }
-
-        #endregion
-
-        #region 元数据缓存
-
-        private class SystemMetadata
-        {
-            public string Name;
-            public string Alias;
-            public int Priority;
-            public int UpdateInterval;
-        }
-
-        private SystemMetadata GetOrCreateMetadata(Type type)
-        {
-            if (_metadataCache.TryGetValue(type, out var meta))
-                return meta;
-
-            var aliasAttr = type.GetCustomAttribute<SystemAliasAttribute>();
-            var priorityAttr = type.GetCustomAttribute<SystemPriorityAttribute>();
-            var intervalAttr = type.GetCustomAttribute<UpdateIntervalAttribute>();
-
-            meta = new SystemMetadata
-            {
-                Name = type.Name,
-                Alias = aliasAttr?.Alias,
-                Priority = priorityAttr?.Priority ?? 0,
-                UpdateInterval = intervalAttr?.FrameInterval ?? 0
-            };
-            _metadataCache[type] = meta;
-            return meta;
-        }
-
-        private class InjectionInfo
-        {
-            public List<(FieldInfo field, bool isWeak)> Fields = new();
-            public List<(PropertyInfo prop, bool isWeak)> Properties = new();
-        }
-
-        private InjectionInfo GetOrCreateInjectionInfo(Type type)
-        {
-            if (_injectionCache.TryGetValue(type, out var info))
-                return info;
-
-            info = new InjectionInfo();
-            var flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-
-            foreach (var field in type.GetFields(flags))
-            {
-                var isInject = field.GetCustomAttribute<InjectAttribute>() != null;
-                var isWeakInject = field.GetCustomAttribute<WeakInjectAttribute>() != null;
-                if (isInject || isWeakInject)
-                    info.Fields.Add((field, isWeakInject));
-            }
-
-            foreach (var prop in type.GetProperties(flags))
-            {
-                if (!prop.CanWrite) continue;
-                var isInject = prop.GetCustomAttribute<InjectAttribute>() != null;
-                var isWeakInject = prop.GetCustomAttribute<WeakInjectAttribute>() != null;
-                if (isInject || isWeakInject)
-                    info.Properties.Add((prop, isWeakInject));
-            }
-
-            _injectionCache[type] = info;
-            return info;
         }
 
         #endregion
@@ -1104,8 +760,9 @@ namespace Azathrix.Framework.Core
         public List<DependencyInfo> GetDependencyGraph()
         {
             var result = new List<DependencyInfo>();
+            var flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
 
-            foreach (var system in _systems)
+            foreach (var system in _container.Systems)
             {
                 var type = system.GetType();
                 var info = new DependencyInfo
@@ -1114,31 +771,22 @@ namespace Azathrix.Framework.Core
                     SystemType = type
                 };
 
-                // 获取 DependsOn 依赖
                 var deps = type.GetCustomAttributes<RequireSystemAttribute>();
                 foreach (var dep in deps)
-                {
                     info.Dependencies.Add(dep.DependencyType);
-                }
 
-                // 获取注入依赖
-                var flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
                 foreach (var field in type.GetFields(flags))
                 {
                     if (field.GetCustomAttribute<InjectAttribute>() != null ||
                         field.GetCustomAttribute<WeakInjectAttribute>() != null)
-                    {
                         info.Injections.Add(field.FieldType);
-                    }
                 }
 
                 foreach (var prop in type.GetProperties(flags))
                 {
                     if (prop.GetCustomAttribute<InjectAttribute>() != null ||
                         prop.GetCustomAttribute<WeakInjectAttribute>() != null)
-                    {
                         info.Injections.Add(prop.PropertyType);
-                    }
                 }
 
                 result.Add(info);
@@ -1148,7 +796,7 @@ namespace Azathrix.Framework.Core
         }
 
         /// <summary>
-        /// 导出依赖图为字符串（可用于日志或调试）
+        /// 导出依赖图为字符串
         /// </summary>
         public string ExportDependencyGraphAsText()
         {

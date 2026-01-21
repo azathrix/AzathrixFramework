@@ -206,6 +206,22 @@ namespace Azathrix.Framework.Events.Core
         }
 
         /// <summary>
+        /// 清理所有静态缓存和订阅，但保持分发器可用
+        /// </summary>
+        public void Clear()
+        {
+            foreach (var cleanup in _cleanupActions)
+                cleanup();
+            _cleanupActions.Clear();
+
+            foreach (var runnerId in _runnerCleanups.Values)
+                DebounceRunner.Unregister(runnerId);
+            _runnerCleanups.Clear();
+
+            _idGenerator = 0;
+        }
+
+        /// <summary>
         /// 释放分发器资源
         /// </summary>
         /// <remarks>

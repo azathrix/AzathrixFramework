@@ -23,7 +23,7 @@ namespace Azathrix.Framework.Core
 {
     public static class AzathrixFramework
     {
-        public const string Version = "0.0.1";
+        public const string Version = "0.0.9";
 
         public static bool IsApplicationStarted { get; private set; }
         public static bool IsStarted { get; private set; }
@@ -82,7 +82,8 @@ namespace Azathrix.Framework.Core
 
         static void Reset()
         {
-            Logger = null;
+            Logger = new DefaultLogger();
+            ResourcesLoader = new DefaultResourcesLoader();
 #if UNITY_EDITOR
             _editorRuntimeManager = null;
 #endif
@@ -93,6 +94,7 @@ namespace Azathrix.Framework.Core
             _pipeline = null;
             _frameworkBehaviour = null;
             IsSetup = false;
+            Dispatcher.Clear();
             Dispatcher = new EventDispatcher();
         }
 
