@@ -15,11 +15,11 @@ namespace Azathrix.Framework.Editor.Core
     public class AzathrixSettingsWindow : EditorWindow
     {
         private List<SettingsEntry> _settings = new();
-        private int _selectedIndex = -1;
+        [SerializeField] private int _selectedIndex = -1;
         private Vector2 _listScroll;
         private Vector2 _inspectorScroll;
         private UnityEditor.Editor _cachedEditor;
-        private float _splitterPos;
+        private float _splitterPos; 
         private bool _isDragging;
         private const string SplitterPosKey = "AzathrixSettingsWindow_SplitterPos";
         private string _searchText = "";
@@ -73,11 +73,16 @@ namespace Azathrix.Framework.Editor.Core
         {
             _splitterPos = EditorPrefs.GetFloat(SplitterPosKey, 220f);
             CollectSettings();
+
+            // 验证选择索引有效性
+            if (_selectedIndex >= _settings.Count)
+                _selectedIndex = _settings.Count - 1;
+
             if (_settings.Count > 0 && _selectedIndex < 0)
-            {
                 _selectedIndex = 0;
-                UpdateCachedEditor();
-            }
+
+            // 域重载后 _cachedEditor 会丢失，需要重建
+            UpdateCachedEditor();
         }
 
         private void OnDisable()
