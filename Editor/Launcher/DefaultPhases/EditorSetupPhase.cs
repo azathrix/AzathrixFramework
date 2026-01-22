@@ -12,7 +12,7 @@ namespace Azathrix.Framework.Editor.Launcher.DefaultPhases
     [PhaseId("EditorSetup")]
     public class EditorSetupPhase : IEditorSetupPhase
     {
-        public int Order => 100;
+        public int Order => 0;
 
         public UniTask ExecuteAsync(LauncherContext context)
         {

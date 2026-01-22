@@ -10,7 +10,7 @@ namespace Azathrix.Framework.Core.Launcher
     }
 
     /// <summary>
-    /// Setup阶段 (Order: 100) - 初始化基础设施
+    /// Setup阶段 (Order: 0) - 初始化基础设施
     /// </summary>
     public interface ISetupPhase : ILauncherPhase { }
 

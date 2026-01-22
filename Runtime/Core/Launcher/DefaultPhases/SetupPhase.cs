@@ -11,7 +11,7 @@ namespace Azathrix.Framework.Core.Launcher.DefaultPhases
     [PhaseId("Setup")]
     public class SetupPhase : ISetupPhase
     {
-        public int Order => 100;
+        public int Order => 0;
 
         public UniTask ExecuteAsync(LauncherContext context)
         {

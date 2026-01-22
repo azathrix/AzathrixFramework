@@ -11,7 +11,7 @@ namespace Azathrix.Framework.Editor.Launcher
     }
 
     /// <summary>
-    /// EditorSetup阶段 (Order: 100) - 编辑器初始化
+    /// EditorSetup阶段 (Order: 0) - 编辑器初始化
     /// </summary>
     public interface IEditorSetupPhase : IEditorLauncherPhase { }
 
