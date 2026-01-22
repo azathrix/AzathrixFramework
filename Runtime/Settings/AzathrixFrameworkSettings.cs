@@ -16,7 +16,7 @@ namespace Azathrix.Framework.Settings
     /// 框架配置
     /// </summary>
     [SettingsPath("AzathrixFrameworkSettings")]
-    [ShowSetting("框架设置")]
+    [ShowSetting("Azathrix")]
     public class AzathrixFrameworkSettings : SettingsBase<AzathrixFrameworkSettings>
     {
         [Header("项目配置")]

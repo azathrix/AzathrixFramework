@@ -11,7 +11,7 @@ namespace Azathrix.Framework.Core.Pipeline
     /// 管线注册表 - 统一管理所有管线的阶段和钩子
     /// </summary>
     [SettingsPath("PipelineRegistry")]
-    [ShowSetting("管线注册表")]
+    // [ShowSetting("管线注册表")]
     public class PipelineRegistry : SettingsBase<PipelineRegistry>
     {
         [SerializeField]

@@ -38,7 +38,7 @@ namespace Azathrix.Framework.Registry
     }
 
     [SettingsPath("SystemRegistry")]
-    [ShowSetting("系统注册表")]
+    // [ShowSetting("系统注册表")]
     public class SystemRegistry : RegistryBase<SystemRegistry, SystemEntry>
     {
         [Header("接口注册")]

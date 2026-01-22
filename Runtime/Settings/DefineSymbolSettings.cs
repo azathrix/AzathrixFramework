@@ -9,7 +9,7 @@ namespace Azathrix.Framework
     /// 宏定义设置
     /// </summary>
     [SettingsPath("DefineSymbolSettings")]
-    [ShowSetting("宏定义设置")]
+    [ShowSetting("宏定义")]
     public class DefineSymbolSettings : SettingsBase<DefineSymbolSettings>
     {
         [Serializable]
