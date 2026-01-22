@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using Azathrix.Framework.Core.Attributes;
@@ -51,6 +50,11 @@ namespace Azathrix.Framework.Core
         /// </summary>
         private readonly DependencyResolver _resolver = new();
 
+        /// <summary>
+        /// 性能分析器 - 负责性能统计
+        /// </summary>
+        private readonly SystemProfiler _profiler = new();
+
         #endregion
 
         #region 生命周期事件列表
@@ -63,13 +67,6 @@ namespace Azathrix.Framework.Core
         private readonly List<ISystemApplicationPause> _pauseList = new();
         private readonly List<ISystemRegister> _registerList = new();
         private readonly List<ISystemInitialize> _initAsyncList = new();
-
-        #endregion
-
-        #region 性能统计
-
-        private readonly Dictionary<ISystem, PerformanceData> _performanceData = new();
-        private readonly Stopwatch _stopwatch = new();
 
         #endregion
 
@@ -96,7 +93,11 @@ namespace Azathrix.Framework.Core
         /// <summary>
         /// 是否启用性能统计
         /// </summary>
-        public bool EnableProfiling { get; set; }
+        public bool EnableProfiling
+        {
+            get => _profiler.Enabled;
+            set => _profiler.Enabled = value;
+        }
 
         /// <summary>
         /// 是否为编辑器模式（跳过运行时生命周期）
@@ -213,7 +214,6 @@ namespace Azathrix.Framework.Core
             var system = GetSystem<T>();
             if (system == null) return null;
 
-            var perf = _performanceData.GetValueOrDefault(system);
             var type = system.GetType();
             return new SystemStatus
             {
@@ -223,8 +223,8 @@ namespace Azathrix.Framework.Core
                 IsEnabled = system is not ISystemEnabled {Enabled: false},
                 IsInitialized = _container.IsInitialized(system),
                 Priority = GetSystemPriority(type),
-                LastUpdateMs = perf?.LastMs ?? 0,
-                AverageUpdateMs = perf?.AverageMs ?? 0
+                LastUpdateMs = _profiler.GetLastMs(system),
+                AverageUpdateMs = _profiler.GetAverageMs(system)
             };
         }
 
@@ -235,7 +235,6 @@ namespace Azathrix.Framework.Core
         {
             return _container.Systems.Select(sys =>
             {
-                var perf = _performanceData.GetValueOrDefault(sys);
                 var type = sys.GetType();
                 var meta = GetOrCreateMetadata(type);
                 return new SystemStatus
@@ -246,8 +245,8 @@ namespace Azathrix.Framework.Core
                     IsEnabled = sys is not ISystemEnabled {Enabled: false},
                     IsInitialized = _container.IsInitialized(sys),
                     Priority = meta.Priority,
-                    LastUpdateMs = perf?.LastMs ?? 0,
-                    AverageUpdateMs = perf?.AverageMs ?? 0,
+                    LastUpdateMs = _profiler.GetLastMs(sys),
+                    AverageUpdateMs = _profiler.GetAverageMs(sys),
                     CanToggle = sys is ISystemEnabled,
                     ModuleId = type.Assembly.GetName().Name
                 };
@@ -374,7 +373,7 @@ namespace Azathrix.Framework.Core
                          ?? throw new Exception($"创建系统实例失败: {type}");
 
             _container.Add(system, type);
-            _performanceData[system] = new PerformanceData();
+            _profiler.Register(system);
 
             // 注册接口映射
             var registeredInterfaces = new List<string>();
@@ -443,7 +442,7 @@ namespace Azathrix.Framework.Core
                 catch (Exception e) { Log.Exception(e); }
             }
 
-            _performanceData.Remove(system);
+            _profiler.Unregister(system);
 
             TryRemoveEvent(system, _updateList);
             TryRemoveEvent(system, _fixedUpdateList);
@@ -527,17 +526,9 @@ namespace Azathrix.Framework.Core
 
                 try
                 {
-                    if (EnableProfiling)
-                    {
-                        _stopwatch.Restart();
-                        sys.OnUpdate(deltaTime);
-                        _stopwatch.Stop();
-                        RecordPerformance(gameSystem, _stopwatch.Elapsed.TotalMilliseconds);
-                    }
-                    else
-                    {
-                        sys.OnUpdate(deltaTime);
-                    }
+                    _profiler.BeginSample();
+                    sys.OnUpdate(deltaTime);
+                    _profiler.EndSample(gameSystem);
                 }
                 catch (Exception e)
                 {
@@ -689,32 +680,6 @@ namespace Azathrix.Framework.Core
             };
             _metadataCache[type] = meta;
             return meta;
-        }
-
-        #endregion
-
-        #region 性能统计
-
-        private class PerformanceData
-        {
-            private const int SampleCount = 60;
-            private readonly Queue<double> _samples = new();
-            public double LastMs { get; private set; }
-            public double AverageMs => _samples.Count > 0 ? _samples.Average() : 0;
-
-            public void Record(double ms)
-            {
-                LastMs = ms;
-                _samples.Enqueue(ms);
-                if (_samples.Count > SampleCount)
-                    _samples.Dequeue();
-            }
-        }
-
-        private void RecordPerformance(ISystem system, double ms)
-        {
-            if (_performanceData.TryGetValue(system, out var data))
-                data.Record(ms);
         }
 
         #endregion
