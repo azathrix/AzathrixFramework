@@ -40,11 +40,14 @@ namespace Azathrix.Framework.Editor
             var settings = DefineSymbolSettings.Instance;
             if (settings == null) return;
 
-            if (settings.Remove(symbol))
+            var removedFromSettings = settings.Remove(symbol);
+            if (removedFromSettings)
             {
                 EditorUtility.SetDirty(settings);
-                SyncToPlayerSettings();
             }
+
+            RemoveFromPlayerSettings(symbol);
+            SyncToPlayerSettings();
         }
 
         /// <summary>
@@ -115,6 +118,29 @@ namespace Azathrix.Framework.Editor
         {
             var definesStr = string.Join(";", defines);
             PlayerSettings.SetScriptingDefineSymbolsForGroup(target, definesStr);
+        }
+
+        private static void RemoveFromPlayerSettings(string symbol)
+        {
+            if (string.IsNullOrEmpty(symbol)) return;
+
+            foreach (BuildTargetGroup target in System.Enum.GetValues(typeof(BuildTargetGroup)))
+            {
+                if (target == BuildTargetGroup.Unknown)
+                    continue;
+
+                try
+                {
+                    var currentDefines = GetPlayerDefines(target);
+                    var newDefines = currentDefines.Where(d => d != symbol).ToList();
+                    if (!AreEqual(currentDefines, newDefines))
+                        SetPlayerDefines(target, newDefines);
+                }
+                catch
+                {
+                    // Some Unity versions expose enum values that are not valid define targets.
+                }
+            }
         }
 
         private static bool AreEqual(List<string> a, List<string> b)
